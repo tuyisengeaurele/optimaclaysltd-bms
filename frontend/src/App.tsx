@@ -17,9 +17,13 @@ import InventoryPage from './pages/InventoryPage';
 import CustomersPage from './pages/CustomersPage';
 import OrdersPage from './pages/OrdersPage';
 import InvoicesPage from './pages/InvoicesPage';
+import ProformasPage from './pages/ProformasPage';
 import DeliveriesPage from './pages/DeliveriesPage';
 import FinancialsPage from './pages/FinancialsPage';
 import ReportsPage from './pages/ReportsPage';
+import UsersPage from './pages/UsersPage';
+import SettingsPage from './pages/SettingsPage';
+import NotFoundPage from './pages/NotFoundPage';
 
 export default function App() {
   return (
@@ -47,11 +51,14 @@ export default function App() {
               <Route path="customers" element={<CustomersPage />} />
               <Route path="orders" element={<OrdersPage />} />
               <Route path="invoices" element={<InvoicesPage />} />
+              <Route path="proformas" element={<ProformasPage />} />
               <Route path="deliveries" element={<DeliveriesPage />} />
               <Route path="financials" element={<FinancialsPage />} />
               <Route path="reports" element={<ReportsPage />} />
+              <Route path="users" element={<UsersPage />} />
+              <Route path="settings" element={<SettingsPage />} />
             </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </ToastProvider>
       </AuthProvider>
