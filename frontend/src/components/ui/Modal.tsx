@@ -2,7 +2,8 @@ import React, { ReactNode } from 'react';
 import { X } from 'lucide-react';
 
 interface Props {
-  open: boolean;
+  open?: boolean;
+  isOpen?: boolean;
   onClose: () => void;
   title: string;
   children: ReactNode;
@@ -11,8 +12,8 @@ interface Props {
 
 const sizes = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-lg', xl: 'max-w-2xl' };
 
-export default function Modal({ open, onClose, title, children, size = 'md' }: Props) {
-  if (!open) return null;
+export default function Modal({ open, isOpen, onClose, title, children, size = 'md' }: Props) {
+  if (!(open ?? isOpen)) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
