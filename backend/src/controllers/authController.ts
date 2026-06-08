@@ -1,10 +1,10 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/jwt';
 import { ok, badRequest, unauthorized } from '../utils/response';
 
-const prisma = new PrismaClient();
+
 
 const COOKIE_OPTS = {
   httpOnly: true,
@@ -88,4 +88,59 @@ export async function getProfile(req: Request, res: Response) {
     select: { id: true, email: true, full_name: true, role: true },
   });
   return ok(res, user);
+}
+
+// ── User management (ADMIN only) ──────────────────────────────────────────────
+export async function listUsers(req: Request, res: Response) {
+  const users = await prisma.user.findMany({
+    select: { id: true, email: true, full_name: true, role: true, is_active: true, createdAt: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  return ok(res, users);
+}
+
+export async function createUser(req: Request, res: Response) {
+  const { email, password, full_name, role } = req.body;
+  if (!email || !password || !full_name || !role) return badRequest(res, 'email, password, full_name and role are required');
+  const exists = await prisma.user.findUnique({ where: { email } });
+  if (exists) return badRequest(res, 'Email already in use');
+  const hashed = await bcrypt.hash(password, 10);
+  const user = await prisma.user.create({
+    data: { email, password: hashed, full_name, role },
+    select: { id: true, email: true, full_name: true, role: true, is_active: true },
+  });
+  return ok(res, user);
+}
+
+export async function updateProfile(req: Request, res: Response) {
+  const userId = (req as any).user?.id;
+  if (!userId) return unauthorized(res);
+  const { full_name, email } = req.body;
+  const data: any = {};
+  if (full_name?.trim()) data.full_name = full_name.trim();
+  if (email?.trim()) {
+    const exists = await prisma.user.findFirst({ where: { email: email.trim(), NOT: { id: userId } } });
+    if (exists) return badRequest(res, 'Email already in use');
+    data.email = email.trim();
+  }
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data,
+    select: { id: true, email: true, full_name: true, role: true },
+  });
+  return ok(res, updated);
+}
+
+export async function updateUser(req: Request, res: Response) {
+  const { id } = req.params;
+  const { full_name, role, is_active, password } = req.body;
+  const user = await prisma.user.findUnique({ where: { id } });
+  if (!user) return badRequest(res, 'User not found');
+  const data: any = {};
+  if (full_name !== undefined) data.full_name = full_name;
+  if (role !== undefined) data.role = role;
+  if (is_active !== undefined) data.is_active = is_active;
+  if (password) data.password = await bcrypt.hash(password, 10);
+  const updated = await prisma.user.update({ where: { id }, data, select: { id: true, email: true, full_name: true, role: true, is_active: true } });
+  return ok(res, updated);
 }
