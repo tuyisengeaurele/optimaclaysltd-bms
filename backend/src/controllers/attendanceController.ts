@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { ok, created, notFound } from '../utils/response';
 
-const prisma = new PrismaClient();
+
 
 export async function listAttendance(req: Request, res: Response) {
   const { employeeId, month, year } = req.query;
@@ -22,6 +22,17 @@ export async function listAttendance(req: Request, res: Response) {
 }
 
 export async function createAttendance(req: Request, res: Response) {
+  // Bulk: { entries: [{ employeeId, date, status, notes }] }
+  if (Array.isArray(req.body.entries)) {
+    const results = await Promise.all(req.body.entries.map((entry: any) =>
+      prisma.attendanceLog.upsert({
+        where: { employeeId_date: { employeeId: entry.employeeId, date: new Date(entry.date) } },
+        update: { status: entry.status, notes: entry.notes },
+        create: { employeeId: entry.employeeId, date: new Date(entry.date), status: entry.status, notes: entry.notes },
+      })
+    ));
+    return created(res, results);
+  }
   const { employeeId, date, status, notes } = req.body;
   const log = await prisma.attendanceLog.upsert({
     where: { employeeId_date: { employeeId, date: new Date(date) } },
@@ -35,9 +46,10 @@ export async function createAttendance(req: Request, res: Response) {
 export async function updateAttendance(req: Request, res: Response) {
   const log = await prisma.attendanceLog.findUnique({ where: { id: req.params.id } });
   if (!log) return notFound(res, 'Attendance log not found');
+  const { status, notes } = req.body;
   const updated = await prisma.attendanceLog.update({
     where: { id: req.params.id },
-    data: req.body,
+    data: { status, notes },
     include: { employee: true },
   });
   return ok(res, updated);
