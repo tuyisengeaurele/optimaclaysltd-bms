@@ -1,8 +1,9 @@
 import { Request, Response } from 'express';
-import { PrismaClient, MaterialType } from '@prisma/client';
+import { MaterialType } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { ok, created, notFound } from '../utils/response';
 
-const prisma = new PrismaClient();
+
 
 export async function listRawMaterials(req: Request, res: Response) {
   const stocks = await prisma.rawMaterialStock.findMany({ orderBy: { date: 'desc' } });
@@ -29,12 +30,18 @@ export async function listRawMaterials(req: Request, res: Response) {
 }
 
 export async function addRawMaterial(req: Request, res: Response) {
-  const stock = await prisma.rawMaterialStock.create({ data: req.body });
+  const { material_type, quantity, unit, unit_cost, total_cost, supplier, date, notes } = req.body;
+  const stock = await prisma.rawMaterialStock.create({
+    data: { material_type, quantity: Number(quantity), unit, unit_cost: Number(unit_cost), total_cost: Number(total_cost), supplier, date: new Date(date), notes },
+  });
   return created(res, stock);
 }
 
 export async function consumeRawMaterial(req: Request, res: Response) {
-  const consumption = await prisma.rawMaterialConsumption.create({ data: req.body });
+  const { material_type, quantity_used, date, notes } = req.body;
+  const consumption = await prisma.rawMaterialConsumption.create({
+    data: { material_type, quantity_used: Number(quantity_used), date: new Date(date), notes },
+  });
   return created(res, consumption);
 }
 
