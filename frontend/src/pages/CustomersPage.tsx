@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search } from 'lucide-react';
 import { customerApi } from '../services/api';
 import { Customer } from '../types';
 import Modal from '../components/ui/Modal';
@@ -37,16 +37,35 @@ export default function CustomersPage() {
     onError: err => toast(getErrorMessage(err), 'error'),
   });
 
+  const [search, setSearch] = useState('');
+
   function openCreate() { setSelected(null); setForm({ ...EMPTY }); setModal('create'); }
   function openEdit(c: Customer) { setSelected(c); setForm({ ...c }); setModal('edit'); }
 
   const isCompany = form.customer_type === 'COMPANY';
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return (customers as Customer[]).filter(c =>
+      (c.full_name ?? '').toLowerCase().includes(q) ||
+      (c.company_name ?? '').toLowerCase().includes(q) ||
+      (c.phone ?? '').includes(q) ||
+      (c.location ?? '').toLowerCase().includes(q)
+    );
+  }, [customers, search]);
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-accent">Customers</h1>
         <button className="btn-primary flex items-center gap-2" onClick={openCreate}><Plus size={16} /> Add Customer</button>
+      </div>
+
+      <div className="card mb-4">
+        <div className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input className="input pl-9" placeholder="Search by name, company, phone or location..." value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
       </div>
 
       <div className="card">
@@ -60,7 +79,7 @@ export default function CustomersPage() {
               </tr>
             </thead>
             <tbody>
-              {customers.map((c: Customer) => (
+              {filtered.map((c: Customer) => (
                 <tr key={c.id} className="border-b border-border hover:bg-background">
                   <td className="px-3 py-3"><Badge variant={c.customer_type === 'COMPANY' ? 'info' : 'default'}>{c.customer_type}</Badge></td>
                   <td className="px-3 py-3 font-medium">{c.company_name || c.full_name || '-'}</td>

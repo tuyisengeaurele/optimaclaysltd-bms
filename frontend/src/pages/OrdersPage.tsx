@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, FileText } from 'lucide-react';
+import { Plus, FileText, Trash2 } from 'lucide-react';
 import { orderApi, customerApi, proformaApi } from '../services/api';
 import { Order } from '../types';
 import Modal from '../components/ui/Modal';
@@ -8,19 +8,25 @@ import Badge, { statusBadge } from '../components/ui/Badge';
 import { useToast } from '../components/ui/Toast';
 import { TableSkeleton } from '../components/ui/Skeleton';
 import { getErrorMessage, fmtDate, fmtRWF } from '../hooks/useToastHelper';
+import { PRODUCTS, getBrickLabel } from '../constants/products';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
+import { useAuth } from '../context/AuthContext';
 
-const BRICK_TYPES = ['SOLID_BRICK','HOLLOW_BLOCK','PAVING_BRICK','CUSTOM'];
+const BRICK_TYPES = Object.keys(PRODUCTS);
 const GRADES = ['GRADE_A','GRADE_B','REJECT'];
 const STATUSES = ['PENDING','CONFIRMED','IN_PRODUCTION','READY','DELIVERED','CANCELLED'];
 
-const EMPTY = { customerId: '', brick_type: 'SOLID_BRICK', quality_grade: 'GRADE_A', quantity: 0, unit_price: 0, order_date: new Date().toISOString().slice(0,10), required_delivery_date: '', notes: '' };
+const EMPTY = { customerId: '', brick_type: 'BRICK_10', quality_grade: 'GRADE_A', quantity: 0, unit_price: 0, order_date: new Date().toISOString().slice(0,10), required_delivery_date: '', notes: '' };
 
 export default function OrdersPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [modal, setModal] = useState<'create' | 'status' | null>(null);
   const [selected, setSelected] = useState<Order | null>(null);
   const [form, setForm] = useState<any>(EMPTY);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ['orders'],
@@ -41,6 +47,12 @@ export default function OrdersPage() {
   const updateStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => orderApi.updateStatus(id, { status }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['orders'] }); toast('Status updated', 'success'); setModal(null); },
+    onError: err => toast(getErrorMessage(err), 'error'),
+  });
+
+  const deleteOrder = useMutation({
+    mutationFn: (id: string) => orderApi.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['orders'] }); toast('Order deleted', 'success'); setDeleteId(null); },
     onError: err => toast(getErrorMessage(err), 'error'),
   });
 
@@ -80,19 +92,27 @@ export default function OrdersPage() {
                 {orders.map((o: Order) => (
                   <tr key={o.id} className="border-b border-border hover:bg-background">
                     <td className="px-3 py-3 font-medium">{o.customer?.company_name || o.customer?.full_name || '-'}</td>
-                    <td className="px-3 py-3">{o.brick_type === 'CUSTOM' ? o.custom_name : o.brick_type.replace('_',' ')}</td>
+                    <td className="px-3 py-3">{getBrickLabel(o.brick_type, o.custom_name)}</td>
                     <td className="px-3 py-3"><Badge variant={o.quality_grade === 'GRADE_A' ? 'success' : o.quality_grade === 'GRADE_B' ? 'warning' : 'danger'}>{o.quality_grade}</Badge></td>
                     <td className="px-3 py-3">{o.quantity?.toLocaleString()}</td>
                     <td className="px-3 py-3 font-medium">{fmtRWF(o.total_amount)}</td>
                     <td className="px-3 py-3 text-muted-foreground">{fmtDate(o.order_date)}</td>
                     <td className="px-3 py-3"><Badge variant={statusBadge(o.status)}>{o.status}</Badge></td>
                     <td className="px-3 py-3">
-                      <div className="flex gap-1">
+                      <div className="flex gap-1 items-center">
                         <button title="Update Status" onClick={() => { setSelected(o); setModal('status'); }} className="text-xs text-primary hover:underline">Status</button>
                         <span className="text-muted-foreground">·</span>
                         <button title="Proforma Invoice" onClick={() => generateProforma.mutate(o.id)} className="text-xs text-accent hover:underline flex items-center gap-1">
                           <FileText size={11} /> PRO
                         </button>
+                        {isAdmin && (
+                          <>
+                            <span className="text-muted-foreground">·</span>
+                            <button title="Delete Order" onClick={() => setDeleteId(o.id)} className="text-xs text-danger hover:underline flex items-center gap-1">
+                              <Trash2 size={11} />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -118,7 +138,7 @@ export default function OrdersPage() {
             <div>
               <label className="label">Brick Type</label>
               <select className="input" value={form.brick_type} onChange={e => setForm({ ...form, brick_type: e.target.value })}>
-                {BRICK_TYPES.map(b => <option key={b}>{b}</option>)}
+                {BRICK_TYPES.map(b => <option key={b} value={b}>{PRODUCTS[b].name}{b !== 'CUSTOM' ? ` (${PRODUCTS[b].dimensions})` : ''}</option>)}
               </select>
             </div>
             {form.brick_type === 'CUSTOM' && (
@@ -155,6 +175,14 @@ export default function OrdersPage() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={!!deleteId}
+        title="Delete Order"
+        message="This will permanently remove the order. This cannot be undone."
+        onConfirm={() => deleteOrder.mutate(deleteId!)}
+        onCancel={() => setDeleteId(null)}
+      />
 
       {/* Update Status Modal */}
       <Modal open={modal === 'status'} onClose={() => setModal(null)} title="Update Order Status">
