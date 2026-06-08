@@ -9,13 +9,22 @@ api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
-    if (error.response?.status === 401 && !original._retry) {
+    // Never try to refresh when the failing request IS the refresh/login/logout call
+    const isAuthMutationEndpoint =
+      original?.url?.includes('/auth/refresh') ||
+      original?.url?.includes('/auth/login') ||
+      original?.url?.includes('/auth/logout');
+
+    if (error.response?.status === 401 && !original._retry && !isAuthMutationEndpoint) {
       original._retry = true;
       try {
         await api.post('/auth/refresh');
+        // Token refreshed — replay the original request
         return api(original);
       } catch {
-        window.location.href = '/login';
+        // Both tokens expired — notify AuthContext via custom event so React
+        // Router can do a clean client-side redirect (no full page reload).
+        window.dispatchEvent(new CustomEvent('auth:session-expired'));
       }
     }
     return Promise.reject(error);
@@ -31,6 +40,11 @@ export const authApi = {
   refresh: () => api.post('/auth/refresh'),
   getProfile: () => api.get('/auth/profile'),
   changePassword: (data: { currentPassword: string; newPassword: string }) => api.put('/auth/change-password', data),
+  updateProfile: (data: { full_name?: string; email?: string }) => api.put('/auth/profile', data),
+  // User management (ADMIN only)
+  listUsers: () => api.get('/auth/users'),
+  createUser: (data: any) => api.post('/auth/users', data),
+  updateUser: (id: string, data: any) => api.put(`/auth/users/${id}`, data),
 };
 
 // Employees
@@ -49,6 +63,7 @@ export const payrollApi = {
   create: (data: { month: number; year: number }) => api.post('/payroll', data),
   updateEntry: (runId: string, entryId: string, data: any) => api.put(`/payroll/${runId}/entries/${entryId}`, data),
   finalize: (runId: string) => api.post(`/payroll/${runId}/finalize`),
+  delete: (runId: string) => api.delete(`/payroll/${runId}`),
   exportUrl: (runId: string) => `${api.defaults.baseURL}/payroll/${runId}/export`,
   payslipUrl: (runId: string, employeeId: string) => `${api.defaults.baseURL}/payroll/${runId}/payslip/${employeeId}`,
 };
@@ -67,6 +82,7 @@ export const productionApi = {
   stats: () => api.get('/production/stats'),
   create: (data: any) => api.post('/production', data),
   update: (id: string, data: any) => api.put(`/production/${id}`, data),
+  delete: (id: string) => api.delete(`/production/${id}`),
 };
 
 // Inventory
@@ -94,12 +110,15 @@ export const orderApi = {
   get: (id: string) => api.get(`/orders/${id}`),
   create: (data: any) => api.post('/orders', data),
   updateStatus: (id: string, data: any) => api.put(`/orders/${id}/status`, data),
+  delete: (id: string) => api.delete(`/orders/${id}`),
 };
 
 // Proforma
 export const proformaApi = {
-  create: (data: { orderId: string }) => api.post('/proforma', data),
+  list: () => api.get('/proforma'),
+  create: (data: { customerId: string; brick_type: string; custom_name?: string; quantity: number; unit_price: number; notes?: string; valid_until?: string }) => api.post('/proforma', data),
   get: (id: string) => api.get(`/proforma/${id}`),
+  delete: (id: string) => api.delete(`/proforma/${id}`),
   printUrl: (id: string) => `${api.defaults.baseURL}/proforma/${id}/print`,
 };
 
@@ -108,6 +127,7 @@ export const invoiceApi = {
   list: () => api.get('/invoices'),
   get: (id: string) => api.get(`/invoices/${id}`),
   create: (data: any) => api.post('/invoices', data),
+  delete: (id: string) => api.delete(`/invoices/${id}`),
 };
 
 // Payments
@@ -121,12 +141,14 @@ export const deliveryApi = {
   list: (params?: any) => api.get('/deliveries', { params }),
   create: (data: any) => api.post('/deliveries', data),
   updateStatus: (id: string, data: any) => api.put(`/deliveries/${id}/status`, data),
+  delete: (id: string) => api.delete(`/deliveries/${id}`),
 };
 
 // Expenses
 export const expenseApi = {
   list: (params?: any) => api.get('/expenses', { params }),
   create: (data: any) => api.post('/expenses', data),
+  delete: (id: string) => api.delete(`/expenses/${id}`),
 };
 
 // Reports
