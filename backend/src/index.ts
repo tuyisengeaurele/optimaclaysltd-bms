@@ -1,3 +1,4 @@
+import 'express-async-errors';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -28,7 +29,16 @@ const app = express();
 
 app.use(helmet());
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: (origin, cb) => {
+    // Allow requests with no origin (Postman, server-to-server)
+    if (!origin) return cb(null, true);
+    // In production use FRONTEND_URL exactly; in dev allow any localhost port
+    if (process.env.NODE_ENV === 'production') {
+      return cb(null, origin === process.env.FRONTEND_URL);
+    }
+    const isLocalhost = /^http:\/\/localhost(:\d+)?$/.test(origin);
+    cb(null, isLocalhost);
+  },
   credentials: true,
 }));
 app.use(morgan('dev'));
