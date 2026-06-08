@@ -74,7 +74,7 @@ export interface ProductionBatch {
 }
 
 export type MaterialType = 'CLAY' | 'SAND' | 'FUEL_FIREWOOD' | 'FUEL_COAL' | 'DIESEL' | 'CEMENT' | 'OTHER';
-export type BrickType = 'SOLID_BRICK' | 'HOLLOW_BLOCK' | 'PAVING_BRICK' | 'CUSTOM';
+export type BrickType = 'BRICK_10' | 'PAVING_BLOCK' | 'HALF_BRICK' | 'LOW_ROCK_BOND' | 'CUSTOM';
 export type QualityGrade = 'GRADE_A' | 'GRADE_B' | 'REJECT';
 
 export interface RawMaterialStock {
