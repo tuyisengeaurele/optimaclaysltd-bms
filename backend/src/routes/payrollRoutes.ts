@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { listPayrollRuns, createPayrollRun, getPayrollRun, updateEntry, finalizeRun, exportPayroll, getPayslip } from '../controllers/payrollController';
-import { authenticate } from '../middleware/auth';
+import { listPayrollRuns, createPayrollRun, getPayrollRun, updateEntry, finalizeRun, exportPayroll, getPayslip, deletePayrollRun } from '../controllers/payrollController';
+import { authenticate, authorize } from '../middleware/auth';
 
 const router = Router();
 router.use(authenticate);
@@ -10,6 +10,7 @@ router.post('/', createPayrollRun);
 router.get('/:runId', getPayrollRun);
 router.put('/:runId/entries/:entryId', updateEntry);
 router.post('/:runId/finalize', finalizeRun);
+router.delete('/:runId', authorize('ADMIN', 'ACCOUNTANT'), deletePayrollRun);
 router.get('/:runId/export', exportPayroll);
 router.get('/:runId/payslip/:employeeId', getPayslip);
 
