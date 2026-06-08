@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, AlertTriangle } from 'lucide-react';
+import { Plus, AlertTriangle, SlidersHorizontal } from 'lucide-react';
 import { inventoryApi } from '../services/api';
 import Modal from '../components/ui/Modal';
 import Badge from '../components/ui/Badge';
 import { useToast } from '../components/ui/Toast';
 import { TableSkeleton } from '../components/ui/Skeleton';
 import { getErrorMessage, fmtDate } from '../hooks/useToastHelper';
+import { PRODUCTS, getBrickLabel } from '../constants/products';
 
 const MATERIALS = ['CLAY','SAND','FUEL_FIREWOOD','FUEL_COAL','DIESEL','CEMENT','OTHER'];
-const BRICK_TYPES = ['SOLID_BRICK','HOLLOW_BLOCK','PAVING_BRICK','CUSTOM'];
+const BRICK_TYPES = Object.keys(PRODUCTS);
 const GRADES = ['GRADE_A','GRADE_B','REJECT'];
 
 export default function InventoryPage() {
@@ -46,6 +47,12 @@ export default function InventoryPage() {
     onError: err => toast(getErrorMessage(err), 'error'),
   });
 
+  const setThreshold = useMutation({
+    mutationFn: (data: any) => inventoryApi.setThreshold(data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['inventory-raw'] }); toast('Threshold updated', 'success'); setModal(null); },
+    onError: err => toast(getErrorMessage(err), 'error'),
+  });
+
   const stocks = rawData?.stocks || [];
   const summary = rawData?.summary || [];
 
@@ -56,12 +63,15 @@ export default function InventoryPage() {
         <div className="flex gap-2">
           {tab === 'raw' && (
             <>
+              <button className="btn-outline text-sm flex items-center gap-1.5" onClick={() => { setForm({ material_type: 'CLAY', threshold: 0, unit: 'kg' }); setModal('threshold'); }}>
+                <SlidersHorizontal size={14} /> Set Threshold
+              </button>
               <button className="btn-outline text-sm" onClick={() => { setForm({ material_type: 'CLAY', quantity: 0, unit: 'kg', unit_cost: 0, total_cost: 0, date: new Date().toISOString().slice(0,10) }); setModal('add-raw'); }}>+ Add Stock</button>
               <button className="btn-secondary text-sm" onClick={() => { setForm({ material_type: 'CLAY', quantity_used: 0, date: new Date().toISOString().slice(0,10) }); setModal('consume'); }}>Record Consumption</button>
             </>
           )}
           {tab === 'finished' && (
-            <button className="btn-primary text-sm flex items-center gap-2" onClick={() => { setForm({ brick_type: 'SOLID_BRICK', quality_grade: 'GRADE_A', quantity: 0 }); setModal('add-finished'); }}>
+            <button className="btn-primary text-sm flex items-center gap-2" onClick={() => { setForm({ brick_type: 'BRICK_10', quality_grade: 'GRADE_A', quantity: 0 }); setModal('add-finished'); }}>
               <Plus size={14} /> Add Finished Goods
             </button>
           )}
@@ -103,7 +113,7 @@ export default function InventoryPage() {
                   {stocks.map((s: any) => (
                     <tr key={s.id} className="border-b border-border">
                       <td className="px-3 py-3">{fmtDate(s.date)}</td>
-                      <td className="px-3 py-3">{s.material_type.replace('_',' ')}</td>
+                      <td className="px-3 py-3">{s.material_type === 'OTHER' && s.notes ? s.notes : s.material_type.replace('_',' ')}</td>
                       <td className="px-3 py-3">{s.quantity} {s.unit}</td>
                       <td className="px-3 py-3">{s.unit}</td>
                       <td className="px-3 py-3">{s.unit_cost?.toLocaleString()}</td>
@@ -134,7 +144,7 @@ export default function InventoryPage() {
                 {finishedGoods.map((g: any) => (
                   <tr key={g.id} className="border-b border-border">
                     <td className="px-3 py-3">{fmtDate(g.date)}</td>
-                    <td className="px-3 py-3">{g.brick_type === 'CUSTOM' ? g.custom_name || 'Custom' : g.brick_type.replace('_',' ')}</td>
+                    <td className="px-3 py-3">{getBrickLabel(g.brick_type, g.custom_name)}</td>
                     <td className="px-3 py-3"><Badge variant={g.quality_grade === 'GRADE_A' ? 'success' : g.quality_grade === 'GRADE_B' ? 'warning' : 'danger'}>{g.quality_grade}</Badge></td>
                     <td className="px-3 py-3 font-medium">{g.quantity?.toLocaleString()}</td>
                     <td className="px-3 py-3 text-muted-foreground">{g.notes || '-'}</td>
@@ -151,10 +161,22 @@ export default function InventoryPage() {
       <Modal open={modal === 'add-raw'} onClose={() => setModal(null)} title="Add Raw Material Stock">
         <form onSubmit={e => { e.preventDefault(); addRaw.mutate(form); }} className="space-y-4">
           <div><label className="label">Material Type</label>
-            <select className="input" value={form.material_type || ''} onChange={e => setForm({ ...form, material_type: e.target.value })}>
+            <select className="input" value={form.material_type || ''} onChange={e => setForm({ ...form, material_type: e.target.value, notes: '' })}>
               {MATERIALS.map(m => <option key={m}>{m}</option>)}
             </select>
           </div>
+          {form.material_type === 'OTHER' && (
+            <div>
+              <label className="label">Specify Material Name <span className="text-primary">*</span></label>
+              <input
+                className="input"
+                value={form.notes || ''}
+                onChange={e => setForm({ ...form, notes: e.target.value })}
+                placeholder="e.g. Rice Husks, Sawdust, Lime..."
+                required
+              />
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div><label className="label">Quantity</label><input type="number" className="input" value={form.quantity || 0} onChange={e => setForm({ ...form, quantity: Number(e.target.value), total_cost: Number(e.target.value) * (form.unit_cost || 0) })} /></div>
             <div><label className="label">Unit</label><input className="input" value={form.unit || ''} onChange={e => setForm({ ...form, unit: e.target.value })} placeholder="kg, tons, liters" /></div>
@@ -188,12 +210,32 @@ export default function InventoryPage() {
         </form>
       </Modal>
 
+      {/* Set Threshold Modal */}
+      <Modal isOpen={modal === 'threshold'} onClose={() => setModal(null)} title="Set Low-Stock Threshold">
+        <form onSubmit={e => { e.preventDefault(); setThreshold.mutate(form); }} className="space-y-4">
+          <p className="text-sm text-gray-500">Set the minimum stock level that triggers a low-stock warning on the dashboard.</p>
+          <div><label className="label">Material Type</label>
+            <select className="input" value={form.material_type || ''} onChange={e => setForm({ ...form, material_type: e.target.value })}>
+              {MATERIALS.map(m => <option key={m}>{m}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div><label className="label">Threshold Quantity</label><input type="number" min={0} className="input" value={form.threshold || 0} onChange={e => setForm({ ...form, threshold: Number(e.target.value) })} /></div>
+            <div><label className="label">Unit</label><input className="input" value={form.unit || ''} onChange={e => setForm({ ...form, unit: e.target.value })} placeholder="kg, tons, liters" /></div>
+          </div>
+          <div className="flex gap-3 justify-end pt-2 border-t border-border">
+            <button type="button" className="btn-outline" onClick={() => setModal(null)}>Cancel</button>
+            <button type="submit" className="btn-primary" disabled={setThreshold.isPending}>Save Threshold</button>
+          </div>
+        </form>
+      </Modal>
+
       {/* Add Finished Goods Modal */}
       <Modal open={modal === 'add-finished'} onClose={() => setModal(null)} title="Add Finished Goods">
         <form onSubmit={e => { e.preventDefault(); addFinished.mutate(form); }} className="space-y-4">
           <div><label className="label">Brick Type</label>
             <select className="input" value={form.brick_type || ''} onChange={e => setForm({ ...form, brick_type: e.target.value })}>
-              {BRICK_TYPES.map(b => <option key={b}>{b}</option>)}
+              {BRICK_TYPES.map(b => <option key={b} value={b}>{PRODUCTS[b].name}{b !== 'CUSTOM' ? ` (${PRODUCTS[b].dimensions})` : ''}</option>)}
             </select>
           </div>
           {form.brick_type === 'CUSTOM' && (
