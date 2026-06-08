@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search } from 'lucide-react';
 import { employeeApi } from '../services/api';
 import { Employee } from '../types';
 import Modal from '../components/ui/Modal';
@@ -24,6 +24,7 @@ export default function EmployeesPage() {
   const [selected, setSelected] = useState<Employee | null>(null);
   const [form, setForm] = useState<any>(EMPTY);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
   const { data: employees = [], isLoading } = useQuery({
     queryKey: ['employees'],
@@ -51,6 +52,15 @@ export default function EmployeesPage() {
   function openCreate() { setSelected(null); setForm({ ...EMPTY }); setModal('create'); }
   function openEdit(e: Employee) { setSelected(e); setForm({ ...e }); setModal('edit'); }
 
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return (employees as Employee[]).filter(e =>
+      e.full_name.toLowerCase().includes(q) ||
+      (e.job_title ?? '').toLowerCase().includes(q) ||
+      (e.bank_name ?? '').toLowerCase().includes(q)
+    );
+  }, [employees, search]);
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -58,6 +68,18 @@ export default function EmployeesPage() {
         <button className="btn-primary flex items-center gap-2" onClick={openCreate}>
           <Plus size={16} /> Add Employee
         </button>
+      </div>
+
+      <div className="card mb-4">
+        <div className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            className="input pl-9"
+            placeholder="Search by name, job title or bank..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
       </div>
 
       <div className="card">
@@ -72,7 +94,7 @@ export default function EmployeesPage() {
                 </tr>
               </thead>
               <tbody>
-                {employees.map((e: Employee) => (
+                {filtered.map((e: Employee) => (
                   <tr key={e.id} className="border-b border-border hover:bg-background">
                     <td className="px-3 py-3 font-medium">{e.full_name}</td>
                     <td className="px-3 py-3 text-muted-foreground">{e.job_title || '-'}</td>
