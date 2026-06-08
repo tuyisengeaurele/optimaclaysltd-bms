@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { ok, created, notFound } from '../utils/response';
 
-const prisma = new PrismaClient();
+
 
 export async function listDeliveries(req: Request, res: Response) {
   const { status, from, to } = req.query;
@@ -20,18 +20,27 @@ export async function listDeliveries(req: Request, res: Response) {
 }
 
 export async function createDelivery(req: Request, res: Response) {
-  const { fuel_cost, driver_fee, hired_truck_cost, ...deliveryData } = req.body;
+  const { delivery_fee, ...deliveryData } = req.body;
   const delivery = await prisma.delivery.create({
     data: {
       ...deliveryData,
       scheduled_date: deliveryData.scheduled_date ? new Date(deliveryData.scheduled_date) : undefined,
       costs: {
-        create: { fuel_cost: fuel_cost || 0, driver_fee: driver_fee || 0, hired_truck_cost: hired_truck_cost || 0 },
+        // Store delivery_fee as driver_fee; fuel_cost and hired_truck_cost are zeroed out
+        create: { fuel_cost: 0, driver_fee: Number(delivery_fee) || 0, hired_truck_cost: 0 },
       },
     },
     include: { order: { include: { customer: true } }, costs: true },
   });
   return created(res, delivery);
+}
+
+export async function deleteDelivery(req: Request, res: Response) {
+  const delivery = await prisma.delivery.findUnique({ where: { id: req.params.id } });
+  if (!delivery) return notFound(res, 'Delivery not found');
+  await prisma.deliveryCost.deleteMany({ where: { deliveryId: req.params.id } });
+  await prisma.delivery.delete({ where: { id: req.params.id } });
+  return ok(res, { message: 'Delivery deleted' });
 }
 
 export async function updateDeliveryStatus(req: Request, res: Response) {
