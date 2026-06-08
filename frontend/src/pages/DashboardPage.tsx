@@ -47,7 +47,7 @@ export default function DashboardPage() {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card">
-          <h3 className="font-semibold text-accent mb-4">Production — Last 30 Days</h3>
+          <h3 className="font-semibold text-accent mb-4">Production over the Last 30 Days</h3>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={productionChart}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E2D9D0" />
@@ -60,7 +60,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="card">
-          <h3 className="font-semibold text-accent mb-4">Revenue vs Expenses — Last 6 Months</h3>
+          <h3 className="font-semibold text-accent mb-4">Revenue vs Expenses over 6 Months</h3>
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={revenueChart}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E2D9D0" />
