@@ -1,17 +1,30 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import ExcelJS from 'exceljs';
 import { ok, created, notFound, badRequest } from '../utils/response';
 import fs from 'fs';
 import path from 'path';
 
-const prisma = new PrismaClient();
+
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 export async function listPayrollRuns(req: Request, res: Response) {
-  const runs = await prisma.payrollRun.findMany({ orderBy: [{ year: 'desc' }, { month: 'desc' }] });
+  const runs = await prisma.payrollRun.findMany({
+    orderBy: [{ year: 'desc' }, { month: 'desc' }],
+    include: { _count: { select: { entries: true } } },
+  });
   return ok(res, runs);
+}
+
+export async function deletePayrollRun(req: Request, res: Response) {
+  const run = await prisma.payrollRun.findUnique({ where: { id: req.params.runId } });
+  if (!run) return notFound(res, 'Payroll run not found');
+  if (run.finalized) return badRequest(res, 'Cannot delete a finalized payroll run');
+  // Cascade delete entries first
+  await prisma.payrollEntry.deleteMany({ where: { payrollRunId: run.id } });
+  await prisma.payrollRun.delete({ where: { id: run.id } });
+  return ok(res, { deleted: true });
 }
 
 export async function createPayrollRun(req: Request, res: Response) {
