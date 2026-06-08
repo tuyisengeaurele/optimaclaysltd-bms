@@ -2,37 +2,45 @@ import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users, DollarSign, Calendar, Factory, Package,
-  ShoppingCart, FileText, Truck, TrendingUp, BarChart2, ChevronLeft,
-  ChevronRight, UserCheck, ClipboardList
+  ShoppingCart, FileText, FileCheck, Truck, TrendingUp, BarChart2,
+  PanelLeftClose, PanelLeftOpen, UserCheck, ClipboardList, ShieldCheck, Settings
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
-const NAV = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/employees', icon: Users, label: 'Employees' },
-  { to: '/attendance', icon: UserCheck, label: 'Attendance' },
-  { to: '/payroll', icon: DollarSign, label: 'Payroll' },
-  { to: '/production', icon: Factory, label: 'Production' },
-  { to: '/inventory', icon: Package, label: 'Inventory' },
-  { to: '/customers', icon: ClipboardList, label: 'Customers' },
-  { to: '/orders', icon: ShoppingCart, label: 'Orders' },
-  { to: '/invoices', icon: FileText, label: 'Invoices' },
-  { to: '/deliveries', icon: Truck, label: 'Deliveries' },
-  { to: '/financials', icon: TrendingUp, label: 'Financials' },
-  { to: '/reports', icon: BarChart2, label: 'Reports' },
+const ALL_NAV = [
+  { to: '/', icon: LayoutDashboard, label: 'Dashboard', roles: null },
+  { to: '/employees', icon: Users, label: 'Employees', roles: ['ADMIN', 'ACCOUNTANT'] },
+  { to: '/attendance', icon: UserCheck, label: 'Attendance', roles: ['ADMIN', 'PRODUCTION_SUPERVISOR'] },
+  { to: '/payroll', icon: DollarSign, label: 'Payroll', roles: ['ADMIN', 'ACCOUNTANT'] },
+  { to: '/production', icon: Factory, label: 'Production', roles: ['ADMIN', 'PRODUCTION_SUPERVISOR'] },
+  { to: '/inventory', icon: Package, label: 'Inventory', roles: ['ADMIN', 'STORE_MANAGER', 'PRODUCTION_SUPERVISOR'] },
+  { to: '/customers', icon: ClipboardList, label: 'Customers', roles: ['ADMIN', 'SALES_OFFICER', 'ACCOUNTANT'] },
+  { to: '/orders', icon: ShoppingCart, label: 'Orders', roles: ['ADMIN', 'SALES_OFFICER', 'ACCOUNTANT'] },
+  { to: '/invoices', icon: FileText, label: 'Invoices', roles: ['ADMIN', 'SALES_OFFICER', 'ACCOUNTANT'] },
+  { to: '/proformas', icon: FileCheck, label: 'Proformas', roles: ['ADMIN', 'SALES_OFFICER', 'ACCOUNTANT'] },
+  { to: '/deliveries', icon: Truck, label: 'Deliveries', roles: ['ADMIN', 'SALES_OFFICER', 'STORE_MANAGER'] },
+  { to: '/financials', icon: TrendingUp, label: 'Financials', roles: ['ADMIN', 'ACCOUNTANT'] },
+  { to: '/reports', icon: BarChart2, label: 'Reports', roles: ['ADMIN', 'ACCOUNTANT'] },
+  { to: '/users', icon: ShieldCheck, label: 'Users', roles: ['ADMIN'] },
+  { to: '/settings', icon: Settings, label: 'Settings', roles: null },
 ];
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
+  const { user } = useAuth();
+  const NAV = ALL_NAV.filter(item => !item.roles || item.roles.includes(user?.role ?? ''));
 
   return (
     <aside
-      className={`flex flex-col bg-accent text-white transition-all duration-200 ${collapsed ? 'w-16' : 'w-64'} min-h-screen flex-shrink-0`}
+      className={`relative flex flex-col bg-accent text-white transition-all duration-200 ${collapsed ? 'w-16' : 'w-64'} h-full flex-shrink-0`}
     >
       {/* Logo */}
-      <div className={`flex items-center gap-3 px-4 py-5 border-b border-white/10 ${collapsed ? 'justify-center' : ''}`}>
-        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-          <span className="text-white font-bold text-xs">OC</span>
-        </div>
+      <div className={`flex items-center gap-3 px-4 py-4 border-b border-white/10 ${collapsed ? 'justify-center' : ''}`}>
+        <img
+          src="/logo.png"
+          alt="OPTIMA CLAYS LTD"
+          className={`object-contain flex-shrink-0 ${collapsed ? 'h-8 w-8' : 'h-10 w-auto max-w-[120px]'}`}
+        />
         {!collapsed && (
           <div>
             <div className="font-bold text-sm leading-tight">OPTIMA CLAYS</div>
@@ -61,12 +69,13 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* Collapse button */}
+      {/* Floating collapse toggle — on the right edge */}
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="flex items-center justify-center p-3 border-t border-white/10 hover:bg-white/10 transition-colors"
+        title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        className="absolute -right-3.5 top-6 z-20 flex items-center justify-center w-7 h-7 bg-surface border border-border rounded-full shadow-md text-muted-foreground hover:text-accent hover:border-accent transition-all duration-150"
       >
-        {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+        {collapsed ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}
       </button>
     </aside>
   );
