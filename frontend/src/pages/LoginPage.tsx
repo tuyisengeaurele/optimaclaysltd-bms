@@ -1,27 +1,32 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
+import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/Toast';
 import { getErrorMessage } from '../hooks/useToastHelper';
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, user, loading } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // If already authenticated, redirect to dashboard
+  if (!loading && user) return <Navigate to="/" replace />;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
+    setSubmitting(true);
     try {
       await login(email, password);
       navigate('/');
     } catch (err) {
       toast(getErrorMessage(err), 'error');
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   }
 
@@ -30,8 +35,8 @@ export default function LoginPage() {
       <div className="bg-surface rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
         {/* Header */}
         <div className="bg-accent px-8 py-8 text-center">
-          <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-3">
-            <span className="text-white font-bold text-2xl">OC</span>
+          <div className="flex items-center justify-center mx-auto mb-3">
+            <img src="/logo.png" alt="OPTIMA CLAYS LTD" className="h-20 w-auto object-contain drop-shadow-md" />
           </div>
           <h1 className="text-white font-bold text-xl">OPTIMA CLAYS LTD</h1>
           <p className="text-white/60 text-sm mt-1">Business Management System</p>
@@ -50,25 +55,37 @@ export default function LoginPage() {
                 onChange={e => setEmail(e.target.value)}
                 placeholder="admin@optimaclays.rw"
                 required
+                autoComplete="email"
               />
             </div>
             <div>
               <label className="label">Password</label>
-              <input
-                type="password"
-                className="input"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  className="input pr-10"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-accent transition-colors"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
             <button
               type="submit"
-              disabled={loading}
+              disabled={submitting}
               className="w-full bg-primary text-white py-2.5 rounded-lg font-medium hover:bg-red-700 transition-colors disabled:opacity-60"
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {submitting ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
         </div>
