@@ -59,9 +59,10 @@ enum MaterialType {
 }
 
 enum BrickType {
-  SOLID_BRICK
-  HOLLOW_BLOCK
-  PAVING_BRICK
+  BRICK_10
+  PAVING_BLOCK
+  HALF_BRICK
+  LOW_ROCK_BOND
   CUSTOM
 }
 
@@ -284,8 +285,14 @@ model ProformaInvoice {
   number       String   @unique
   customer     Customer @relation(fields: [customerId], references: [id])
   customerId   String
-  order        Order    @relation(fields: [orderId], references: [id])
-  orderId      String
+  // orderId is optional — proformas are created before an order exists
+  order        Order?   @relation(fields: [orderId], references: [id])
+  orderId      String?
+  // Standalone line-item fields (used when no order is linked)
+  brick_type   String?
+  custom_name  String?
+  quantity     Int?
+  unit_price   Float?
   date_issued  DateTime @default(now())
   valid_until  DateTime
   subtotal     Float
