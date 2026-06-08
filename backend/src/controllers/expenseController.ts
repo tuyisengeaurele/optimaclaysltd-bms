@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-import { ok, created } from '../utils/response';
+import { prisma } from '../lib/prisma';
+import { ok, created, notFound } from '../utils/response';
 
-const prisma = new PrismaClient();
+
 
 export async function listExpenses(req: Request, res: Response) {
   const { from, to } = req.query;
@@ -16,4 +16,11 @@ export async function listExpenses(req: Request, res: Response) {
 export async function createExpense(req: Request, res: Response) {
   const expense = await prisma.expense.create({ data: { ...req.body, date: new Date(req.body.date) } });
   return created(res, expense);
+}
+
+export async function deleteExpense(req: Request, res: Response) {
+  const expense = await prisma.expense.findUnique({ where: { id: req.params.id } });
+  if (!expense) return notFound(res, 'Expense not found');
+  await prisma.expense.delete({ where: { id: req.params.id } });
+  return ok(res, { message: 'Expense deleted' });
 }
