@@ -5,6 +5,7 @@ import { reportApi, payrollApi } from '../services/api';
 import { TableSkeleton } from '../components/ui/Skeleton';
 import Badge, { statusBadge } from '../components/ui/Badge';
 import { fmtDate, fmtRWF, MONTHS } from '../hooks/useToastHelper';
+import { getBrickLabel } from '../constants/products';
 
 type ReportType = 'production' | 'sales' | 'payroll' | 'financials';
 
@@ -148,7 +149,7 @@ export default function ReportsPage() {
                     <tr key={o.id} className="border-b border-border">
                       <td className="px-3 py-3">{fmtDate(o.order_date)}</td>
                       <td className="px-3 py-3">{o.customer?.company_name || o.customer?.full_name}</td>
-                      <td className="px-3 py-3">{o.brick_type}</td>
+                      <td className="px-3 py-3">{getBrickLabel(o.brick_type, o.custom_name)}</td>
                       <td className="px-3 py-3">{o.quantity?.toLocaleString()}</td>
                       <td className="px-3 py-3 font-medium">{fmtRWF(o.total_amount)}</td>
                       <td className="px-3 py-3"><Badge variant={statusBadge(o.status)}>{o.status}</Badge></td>

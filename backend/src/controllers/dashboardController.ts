@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { ok } from '../utils/response';
 
-const prisma = new PrismaClient();
+
 
 export async function getDashboard(req: Request, res: Response) {
   const today = new Date();

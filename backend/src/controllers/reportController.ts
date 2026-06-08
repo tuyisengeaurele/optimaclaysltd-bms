@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { ok } from '../utils/response';
 
-const prisma = new PrismaClient();
+
 
 function dateRange(req: any) {
   const from = req.query.from ? new Date(req.query.from) : new Date(new Date().getFullYear(), 0, 1);
