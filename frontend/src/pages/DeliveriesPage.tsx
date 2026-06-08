@@ -1,21 +1,26 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { deliveryApi, orderApi } from '../services/api';
 import Modal from '../components/ui/Modal';
 import Badge, { statusBadge } from '../components/ui/Badge';
 import { useToast } from '../components/ui/Toast';
 import { TableSkeleton } from '../components/ui/Skeleton';
 import { getErrorMessage, fmtDate, fmtRWF } from '../hooks/useToastHelper';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
+import { useAuth } from '../context/AuthContext';
 
 const STATUSES = ['SCHEDULED','IN_TRANSIT','DELIVERED','RETURNED'];
 
 export default function DeliveriesPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [modal, setModal] = useState<'create' | 'status' | null>(null);
   const [selected, setSelected] = useState<any>(null);
-  const [form, setForm] = useState<any>({ orderId: '', vehicle_plate: '', driver_name: '', scheduled_date: '', quantity_loaded: 0, fuel_cost: 0, driver_fee: 0, hired_truck_cost: 0 });
+  const [form, setForm] = useState<any>({ orderId: '', vehicle_plate: '', driver_name: '', scheduled_date: '', quantity_loaded: 0, delivery_fee: 0 });
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data: deliveries = [], isLoading } = useQuery({
     queryKey: ['deliveries'],
@@ -33,6 +38,12 @@ export default function DeliveriesPage() {
     onError: err => toast(getErrorMessage(err), 'error'),
   });
 
+  const deleteDelivery = useMutation({
+    mutationFn: (id: string) => deliveryApi.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['deliveries'] }); toast('Delivery deleted', 'success'); setDeleteId(null); },
+    onError: err => toast(getErrorMessage(err), 'error'),
+  });
+
   const updateStatus = useMutation({
     mutationFn: ({ id, status, notes, actual_delivery_date }: any) => deliveryApi.updateStatus(id, { status, notes, actual_delivery_date }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['deliveries'] }); toast('Status updated', 'success'); setModal(null); },
@@ -43,7 +54,7 @@ export default function DeliveriesPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-accent">Deliveries</h1>
-        <button className="btn-primary flex items-center gap-2" onClick={() => { setForm({ orderId: '', vehicle_plate: '', driver_name: '', scheduled_date: new Date().toISOString().slice(0,10), quantity_loaded: 0, fuel_cost: 0, driver_fee: 0, hired_truck_cost: 0 }); setModal('create'); }}>
+        <button className="btn-primary flex items-center gap-2" onClick={() => { setForm({ orderId: '', vehicle_plate: '', driver_name: '', scheduled_date: new Date().toISOString().slice(0,10), quantity_loaded: 0, delivery_fee: 0 }); setModal('create'); }}>
           <Plus size={16} /> Schedule Delivery
         </button>
       </div>
@@ -54,14 +65,14 @@ export default function DeliveriesPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="table-header">
-                  {['Customer','Driver','Vehicle','Scheduled','Qty','Total Cost','Status','Actions'].map(h => (
+                  {['Customer','Driver','Vehicle','Scheduled','Qty','Delivery Fee','Status','Actions'].map(h => (
                     <th key={h} className="px-3 py-3 text-left first:rounded-l last:rounded-r">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {deliveries.map((d: any) => {
-                  const cost = d.costs?.reduce((s: number, c: any) => s + c.fuel_cost + c.driver_fee + c.hired_truck_cost, 0) || 0;
+                  const cost = d.costs?.reduce((s: number, c: any) => s + (c.driver_fee || 0), 0) || 0;
                   return (
                     <tr key={d.id} className="border-b border-border hover:bg-background">
                       <td className="px-3 py-3">{d.order?.customer?.company_name || d.order?.customer?.full_name || '-'}</td>
@@ -72,7 +83,17 @@ export default function DeliveriesPage() {
                       <td className="px-3 py-3">{fmtRWF(cost)}</td>
                       <td className="px-3 py-3"><Badge variant={statusBadge(d.status)}>{d.status}</Badge></td>
                       <td className="px-3 py-3">
-                        <button onClick={() => { setSelected(d); setModal('status'); }} className="text-xs text-primary hover:underline">Update</button>
+                        <div className="flex gap-2 items-center">
+                          <button onClick={() => { setSelected(d); setModal('status'); }} className="text-xs text-primary hover:underline">Update</button>
+                          {isAdmin && (
+                            <>
+                              <span className="text-muted-foreground">·</span>
+                              <button onClick={() => setDeleteId(d.id)} className="flex items-center text-xs text-danger hover:underline" title="Delete Delivery">
+                                <Trash2 size={11} />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -84,6 +105,14 @@ export default function DeliveriesPage() {
         )}
       </div>
 
+      <ConfirmDialog
+        open={!!deleteId}
+        title="Delete Delivery"
+        message="This will permanently remove the delivery record. This cannot be undone."
+        onConfirm={() => deleteDelivery.mutate(deleteId!)}
+        onCancel={() => setDeleteId(null)}
+      />
+
       <Modal open={modal === 'create'} onClose={() => setModal(null)} title="Schedule Delivery" size="lg">
         <form onSubmit={e => { e.preventDefault(); create.mutate(form); }} className="space-y-4">
           <div>
@@ -91,7 +120,7 @@ export default function DeliveriesPage() {
             <select className="input" value={form.orderId} onChange={e => setForm({ ...form, orderId: e.target.value })} required>
               <option value="">-- Select Order --</option>
               {orders.filter((o: any) => ['CONFIRMED','READY'].includes(o.status)).map((o: any) => (
-                <option key={o.id} value={o.id}>{o.customer?.company_name || o.customer?.full_name} — {o.brick_type}</option>
+                <option key={o.id} value={o.id}>{o.customer?.company_name || o.customer?.full_name}: {o.brick_type === 'CUSTOM' ? (o.custom_name || 'Custom') : o.brick_type.replace(/_/g, ' ')}</option>
               ))}
             </select>
           </div>
@@ -101,10 +130,9 @@ export default function DeliveriesPage() {
             <div><label className="label">Scheduled Date</label><input type="date" className="input" value={form.scheduled_date} onChange={e => setForm({ ...form, scheduled_date: e.target.value })} /></div>
             <div><label className="label">Quantity Loaded</label><input type="number" className="input" value={form.quantity_loaded} onChange={e => setForm({ ...form, quantity_loaded: Number(e.target.value) })} /></div>
           </div>
-          <div className="grid grid-cols-3 gap-4">
-            <div><label className="label">Fuel Cost (RWF)</label><input type="number" className="input" value={form.fuel_cost} onChange={e => setForm({ ...form, fuel_cost: Number(e.target.value) })} /></div>
-            <div><label className="label">Driver Fee (RWF)</label><input type="number" className="input" value={form.driver_fee} onChange={e => setForm({ ...form, driver_fee: Number(e.target.value) })} /></div>
-            <div><label className="label">Truck Cost (RWF)</label><input type="number" className="input" value={form.hired_truck_cost} onChange={e => setForm({ ...form, hired_truck_cost: Number(e.target.value) })} /></div>
+          <div>
+            <label className="label">Delivery Fee (RWF)</label>
+            <input type="number" className="input" value={form.delivery_fee} onChange={e => setForm({ ...form, delivery_fee: Number(e.target.value) })} min={0} />
           </div>
           <div className="flex gap-3 justify-end pt-2 border-t border-border">
             <button type="button" className="btn-outline" onClick={() => setModal(null)}>Cancel</button>
