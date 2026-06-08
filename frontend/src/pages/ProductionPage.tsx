@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Plus, Pencil } from 'lucide-react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { productionApi } from '../services/api';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { ProductionBatch } from '../types';
 import Modal from '../components/ui/Modal';
 import Badge from '../components/ui/Badge';
@@ -21,10 +22,15 @@ export default function ProductionPage() {
   const [modal, setModal] = useState<'create' | 'edit' | null>(null);
   const [selected, setSelected] = useState<ProductionBatch | null>(null);
   const [form, setForm] = useState<any>(EMPTY);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data: batches = [], isLoading } = useQuery({
     queryKey: ['production'],
-    queryFn: () => productionApi.list().then(r => r.data.data),
+    queryFn: () => productionApi.list().then(r => {
+      const d = r.data.data;
+      // API returns paginated { batches, total } or a plain array
+      return Array.isArray(d) ? d : (d.batches ?? []);
+    }),
   });
 
   const { data: stats } = useQuery({
@@ -39,6 +45,16 @@ export default function ProductionPage() {
       qc.invalidateQueries({ queryKey: ['production-stats'] });
       toast(selected ? 'Batch updated' : 'Batch created', 'success');
       setModal(null);
+    },
+    onError: err => toast(getErrorMessage(err), 'error'),
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => productionApi.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['production'] });
+      qc.invalidateQueries({ queryKey: ['production-stats'] });
+      toast('Batch deleted', 'success');
     },
     onError: err => toast(getErrorMessage(err), 'error'),
   });
@@ -81,7 +97,7 @@ export default function ProductionPage() {
       {/* Chart */}
       {stats?.daily?.length > 0 && (
         <div className="card">
-          <h3 className="font-semibold text-accent mb-4">Daily Output — Last 30 Days</h3>
+          <h3 className="font-semibold text-accent mb-4">Daily Output over the Last 30 Days</h3>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={stats.daily}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E2D9D0" />
@@ -118,7 +134,10 @@ export default function ProductionPage() {
                     <td className="px-3 py-3 text-danger">{b.bricks_rejected?.toLocaleString()}</td>
                     <td className="px-3 py-3"><Badge variant={stageColor[b.current_stage]}>{b.current_stage.replace('_',' ')}</Badge></td>
                     <td className="px-3 py-3">
-                      <button onClick={() => openEdit(b)} className="p-1.5 hover:bg-background rounded text-accent"><Pencil size={14} /></button>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => openEdit(b)} className="p-1.5 hover:bg-background rounded text-accent" title="Edit"><Pencil size={14} /></button>
+                        <button onClick={() => setDeleteId(b.id)} className="p-1.5 hover:bg-background rounded text-danger" title="Delete"><Trash2 size={14} /></button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -130,6 +149,14 @@ export default function ProductionPage() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!deleteId}
+        title="Delete Production Batch"
+        message="Are you sure you want to permanently delete this batch? This cannot be undone."
+        onConfirm={() => { if (deleteId) remove.mutate(deleteId); setDeleteId(null); }}
+        onCancel={() => setDeleteId(null)}
+      />
 
       <Modal open={!!modal} onClose={() => setModal(null)} title={modal === 'edit' ? 'Edit Batch' : 'Add Production Batch'} size="lg">
         <form onSubmit={e => { e.preventDefault(); save.mutate(form); }} className="grid grid-cols-2 gap-4">
@@ -155,15 +182,21 @@ export default function ProductionPage() {
           </div>
           <div>
             <label className="label">Target</label>
-            <input type="number" className="input" value={form.bricks_target} onChange={e => setForm({ ...form, bricks_target: Number(e.target.value) })} />
+            <input type="number" className="input" value={form.bricks_target} onChange={e => {
+              const target = Number(e.target.value);
+              setForm({ ...form, bricks_target: target, bricks_rejected: Math.max(0, target - (form.bricks_produced || 0)) });
+            }} />
           </div>
           <div>
             <label className="label">Produced</label>
-            <input type="number" className="input" value={form.bricks_produced} onChange={e => setForm({ ...form, bricks_produced: Number(e.target.value) })} />
+            <input type="number" className="input" value={form.bricks_produced} onChange={e => {
+              const produced = Number(e.target.value);
+              setForm({ ...form, bricks_produced: produced, bricks_rejected: Math.max(0, (form.bricks_target || 0) - produced) });
+            }} />
           </div>
           <div>
-            <label className="label">Rejected</label>
-            <input type="number" className="input" value={form.bricks_rejected} onChange={e => setForm({ ...form, bricks_rejected: Number(e.target.value) })} />
+            <label className="label">Rejected <span className="text-xs text-muted-foreground">(auto)</span></label>
+            <input type="number" className="input bg-background" value={form.bricks_rejected} onChange={e => setForm({ ...form, bricks_rejected: Number(e.target.value) })} />
           </div>
           <div className="col-span-2">
             <label className="label">Rejection Reason</label>

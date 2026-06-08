@@ -1,28 +1,47 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-import { ok, created, notFound } from '../utils/response';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
+import { ok, created, notFound, badRequest } from '../utils/response';
 
 export async function listBatches(req: Request, res: Response) {
-  const { from, to } = req.query;
+  const { from, to, page = '1', limit = '50' } = req.query;
   const where: any = {};
   if (from) where.date = { ...where.date, gte: new Date(from as string) };
   if (to) where.date = { ...where.date, lte: new Date(to as string) };
-  const batches = await prisma.productionBatch.findMany({ where, orderBy: { date: 'desc' } });
-  return ok(res, batches);
+  const skip = (Number(page) - 1) * Number(limit);
+  const [batches, total] = await Promise.all([
+    prisma.productionBatch.findMany({ where, orderBy: { date: 'desc' }, skip, take: Number(limit) }),
+    prisma.productionBatch.count({ where }),
+  ]);
+  return ok(res, { batches, total, page: Number(page), limit: Number(limit) });
 }
 
 export async function createBatch(req: Request, res: Response) {
-  const batch = await prisma.productionBatch.create({ data: req.body });
+  const { date, shift, kiln_number, bricks_target, bricks_produced, bricks_rejected, rejection_reason, current_stage } = req.body;
+  if (!date || bricks_produced == null) return badRequest(res, 'date and bricks_produced are required');
+  if (bricks_produced < 0 || (bricks_rejected ?? 0) < 0) return badRequest(res, 'Brick counts cannot be negative');
+  if ((bricks_rejected ?? 0) > bricks_produced) return badRequest(res, 'Rejected cannot exceed produced');
+  const batch = await prisma.productionBatch.create({
+    data: { date: new Date(date), shift, kiln_number, bricks_target: bricks_target ?? 0, bricks_produced, bricks_rejected: bricks_rejected ?? 0, rejection_reason, current_stage },
+  });
   return created(res, batch);
 }
 
 export async function updateBatch(req: Request, res: Response) {
   const batch = await prisma.productionBatch.findUnique({ where: { id: req.params.id } });
   if (!batch) return notFound(res, 'Production batch not found');
-  const updated = await prisma.productionBatch.update({ where: { id: req.params.id }, data: req.body });
+  const { date, shift, kiln_number, bricks_target, bricks_produced, bricks_rejected, rejection_reason, current_stage } = req.body;
+  const updated = await prisma.productionBatch.update({
+    where: { id: req.params.id },
+    data: { date: date ? new Date(date) : undefined, shift, kiln_number, bricks_target, bricks_produced, bricks_rejected, rejection_reason, current_stage },
+  });
   return ok(res, updated);
+}
+
+export async function deleteBatch(req: Request, res: Response) {
+  const batch = await prisma.productionBatch.findUnique({ where: { id: req.params.id } });
+  if (!batch) return notFound(res, 'Production batch not found');
+  await prisma.productionBatch.delete({ where: { id: req.params.id } });
+  return ok(res, { deleted: true });
 }
 
 export async function getStats(req: Request, res: Response) {
