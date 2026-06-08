@@ -1,22 +1,29 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, CreditCard } from 'lucide-react';
+import { Plus, CreditCard, Trash2, FileCheck } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { invoiceApi, paymentApi, orderApi } from '../services/api';
 import Modal from '../components/ui/Modal';
 import Badge from '../components/ui/Badge';
 import { useToast } from '../components/ui/Toast';
 import { TableSkeleton } from '../components/ui/Skeleton';
 import { getErrorMessage, fmtDate, fmtRWF } from '../hooks/useToastHelper';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
+import { useAuth } from '../context/AuthContext';
 
 const PAYMENT_METHODS = ['CASH','MOBILE_MONEY','BANK_TRANSFER'];
 
 export default function InvoicesPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'ACCOUNTANT';
   const [modal, setModal] = useState<'create' | 'payment' | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [form, setForm] = useState<any>({ orderId: '', due_date: '' });
   const [payForm, setPayForm] = useState<any>({ amount: 0, date: new Date().toISOString().slice(0,10), method: 'BANK_TRANSFER', reference: '', notes: '' });
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data: invoices = [], isLoading } = useQuery({
     queryKey: ['invoices'],
@@ -34,6 +41,12 @@ export default function InvoicesPage() {
     onError: err => toast(getErrorMessage(err), 'error'),
   });
 
+  const deleteInvoice = useMutation({
+    mutationFn: (id: string) => invoiceApi.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['invoices'] }); toast('Invoice deleted', 'success'); setDeleteId(null); },
+    onError: err => toast(getErrorMessage(err), 'error'),
+  });
+
   const addPayment = useMutation({
     mutationFn: (data: any) => paymentApi.create(data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['invoices'] }); toast('Payment recorded', 'success'); setModal(null); },
@@ -44,9 +57,14 @@ export default function InvoicesPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-accent">Invoices</h1>
-        <button className="btn-primary flex items-center gap-2" onClick={() => { setForm({ orderId: '', due_date: '' }); setModal('create'); }}>
-          <Plus size={16} /> Create Invoice
-        </button>
+        <div className="flex gap-2">
+          <button className="btn-outline flex items-center gap-2" onClick={() => navigate('/proformas')}>
+            <FileCheck size={15} /> Proforma Invoices
+          </button>
+          <button className="btn-primary flex items-center gap-2" onClick={() => { setForm({ orderId: '', due_date: '' }); setModal('create'); }}>
+            <Plus size={16} /> Create Invoice
+          </button>
+        </div>
       </div>
 
       <div className="card">
@@ -75,10 +93,20 @@ export default function InvoicesPage() {
                        <Badge variant="warning">PENDING</Badge>}
                     </td>
                     <td className="px-3 py-3">
-                      <button onClick={() => { setSelectedInvoice(inv); setPayForm({ amount: inv.balance || 0, date: new Date().toISOString().slice(0,10), method: 'BANK_TRANSFER', reference: '', notes: '' }); setModal('payment'); }}
-                        className="flex items-center gap-1 text-xs text-primary hover:underline">
-                        <CreditCard size={12} /> Payment
-                      </button>
+                      <div className="flex gap-2 items-center">
+                        <button onClick={() => { setSelectedInvoice(inv); setPayForm({ amount: inv.balance || 0, date: new Date().toISOString().slice(0,10), method: 'BANK_TRANSFER', reference: '', notes: '' }); setModal('payment'); }}
+                          className="flex items-center gap-1 text-xs text-primary hover:underline">
+                          <CreditCard size={12} /> Payment
+                        </button>
+                        {isAdmin && (
+                          <>
+                            <span className="text-muted-foreground">·</span>
+                            <button onClick={() => setDeleteId(inv.id)} className="flex items-center gap-1 text-xs text-danger hover:underline" title="Delete Invoice">
+                              <Trash2 size={11} />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -89,6 +117,14 @@ export default function InvoicesPage() {
         )}
       </div>
 
+      <ConfirmDialog
+        open={!!deleteId}
+        title="Delete Invoice"
+        message="This will permanently delete the invoice and all its payments. This cannot be undone."
+        onConfirm={() => deleteInvoice.mutate(deleteId!)}
+        onCancel={() => setDeleteId(null)}
+      />
+
       <Modal open={modal === 'create'} onClose={() => setModal(null)} title="Create Invoice">
         <form onSubmit={e => { e.preventDefault(); createInvoice.mutate(form); }} className="space-y-4">
           <div>
@@ -96,7 +132,7 @@ export default function InvoicesPage() {
             <select className="input" value={form.orderId} onChange={e => setForm({ ...form, orderId: e.target.value })} required>
               <option value="">-- Select Order --</option>
               {orders.filter((o: any) => o.status !== 'CANCELLED').map((o: any) => (
-                <option key={o.id} value={o.id}>{o.customer?.company_name || o.customer?.full_name} — {fmtRWF(o.total_amount)}</option>
+                <option key={o.id} value={o.id}>{o.customer?.company_name || o.customer?.full_name} ({fmtRWF(o.total_amount)})</option>
               ))}
             </select>
           </div>
@@ -111,7 +147,7 @@ export default function InvoicesPage() {
         </form>
       </Modal>
 
-      <Modal open={modal === 'payment'} onClose={() => setModal(null)} title={`Record Payment — ${selectedInvoice?.number}`}>
+      <Modal open={modal === 'payment'} onClose={() => setModal(null)} title={`Record Payment for ${selectedInvoice?.number}`}>
         <form onSubmit={e => { e.preventDefault(); addPayment.mutate({ ...payForm, invoiceId: selectedInvoice.id }); }} className="space-y-4">
           <div className="bg-background p-3 rounded-lg text-sm">
             <div>Balance: <strong className="text-danger">{fmtRWF(selectedInvoice?.balance || 0)}</strong></div>
