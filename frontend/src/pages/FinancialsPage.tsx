@@ -1,20 +1,25 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, TrendingUp, TrendingDown } from 'lucide-react';
+import { Plus, TrendingUp, TrendingDown, Trash2 } from 'lucide-react';
 import { reportApi, expenseApi } from '../services/api';
 import Modal from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { getErrorMessage, fmtDate, fmtRWF } from '../hooks/useToastHelper';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
+import { useAuth } from '../context/AuthContext';
 
 const CATEGORIES = ['MAINTENANCE','UTILITIES','TRANSPORT','OTHER'];
 
 export default function FinancialsPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'ACCOUNTANT';
   const [from, setFrom] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().slice(0,10); });
   const [to, setTo] = useState(new Date().toISOString().slice(0,10));
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({ category: 'MAINTENANCE', amount: 0, date: new Date().toISOString().slice(0,10), description: '' });
+  const [deleteExpId, setDeleteExpId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['financials', from, to],
@@ -24,6 +29,12 @@ export default function FinancialsPage() {
   const { data: expenses = [], isLoading: expLoading } = useQuery({
     queryKey: ['expenses', from, to],
     queryFn: () => expenseApi.list({ from, to }).then(r => r.data.data),
+  });
+
+  const delExpense = useMutation({
+    mutationFn: (id: string) => expenseApi.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['financials'] }); qc.invalidateQueries({ queryKey: ['expenses'] }); toast('Expense deleted', 'success'); setDeleteExpId(null); },
+    onError: err => toast(getErrorMessage(err), 'error'),
   });
 
   const addExpense = useMutation({
@@ -86,7 +97,7 @@ export default function FinancialsPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="table-header">
-              {['Date','Category','Amount','Description'].map(h => (
+              {['Date','Category','Amount','Description', ...(isAdmin ? [''] : [])].map(h => (
                 <th key={h} className="px-3 py-3 text-left first:rounded-l last:rounded-r">{h}</th>
               ))}
             </tr>
@@ -98,12 +109,25 @@ export default function FinancialsPage() {
                 <td className="px-3 py-3">{e.category}</td>
                 <td className="px-3 py-3 font-medium">{fmtRWF(e.amount)}</td>
                 <td className="px-3 py-3 text-muted-foreground">{e.description || '-'}</td>
+                {isAdmin && (
+                  <td className="px-3 py-3">
+                    <button onClick={() => setDeleteExpId(e.id)} className="text-danger hover:text-red-700" title="Delete expense"><Trash2 size={14} /></button>
+                  </td>
+                )}
               </tr>
             ))}
             {expenses.length === 0 && <tr><td colSpan={4} className="px-3 py-6 text-center text-muted-foreground">No manual expenses recorded</td></tr>}
           </tbody>
         </table>
       </div>
+
+      <ConfirmDialog
+        open={!!deleteExpId}
+        title="Delete Expense"
+        message="This will permanently remove this expense record. This cannot be undone."
+        onConfirm={() => delExpense.mutate(deleteExpId!)}
+        onCancel={() => setDeleteExpId(null)}
+      />
 
       <Modal open={modal} onClose={() => setModal(false)} title="Add Manual Expense">
         <form onSubmit={e => { e.preventDefault(); addExpense.mutate(form); }} className="space-y-4">

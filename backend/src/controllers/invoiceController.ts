@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { ok, created, notFound } from '../utils/response';
 
-const prisma = new PrismaClient();
+
 
 function getNextInvoiceNumber(year: number, count: number) {
   return `OCL-${year}-${String(count + 1).padStart(3, '0')}`;
@@ -50,6 +50,16 @@ export async function createInvoice(req: Request, res: Response) {
     include: { items: true, order: { include: { customer: true } } },
   });
   return created(res, invoice);
+}
+
+export async function deleteInvoice(req: Request, res: Response) {
+  const invoice = await prisma.invoice.findUnique({ where: { id: req.params.id } });
+  if (!invoice) return notFound(res, 'Invoice not found');
+  // Delete dependents first
+  await prisma.payment.deleteMany({ where: { invoiceId: req.params.id } });
+  await prisma.invoiceItem.deleteMany({ where: { invoiceId: req.params.id } });
+  await prisma.invoice.delete({ where: { id: req.params.id } });
+  return ok(res, { message: 'Invoice deleted' });
 }
 
 export async function getInvoice(req: Request, res: Response) {

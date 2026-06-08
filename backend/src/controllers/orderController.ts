@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { ok, created, notFound } from '../utils/response';
 
-const prisma = new PrismaClient();
+
 
 export async function listOrders(req: Request, res: Response) {
   const orders = await prisma.order.findMany({
@@ -32,14 +32,22 @@ export async function getOrder(req: Request, res: Response) {
   return ok(res, order);
 }
 
+export async function deleteOrder(req: Request, res: Response) {
+  const order = await prisma.order.findFirst({ where: { id: req.params.id, deletedAt: null } });
+  if (!order) return notFound(res, 'Order not found');
+  await prisma.order.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });
+  return ok(res, { message: 'Order deleted' });
+}
+
 export async function updateOrderStatus(req: Request, res: Response) {
   const order = await prisma.order.findFirst({
     where: { id: req.params.id, deletedAt: null },
   });
   if (!order) return notFound(res, 'Order not found');
+  const { status, notes } = req.body;
   const updated = await prisma.order.update({
     where: { id: req.params.id },
-    data: { status: req.body.status, ...req.body },
+    data: { status, ...(notes !== undefined ? { notes } : {}) },
     include: { customer: true },
   });
   return ok(res, updated);
