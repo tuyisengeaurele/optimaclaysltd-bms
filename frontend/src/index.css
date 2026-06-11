@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hide browser-native password reveal buttons (Edge, IE, Chrome) */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
+
 @layer base {
   * {
     @apply border-border;
