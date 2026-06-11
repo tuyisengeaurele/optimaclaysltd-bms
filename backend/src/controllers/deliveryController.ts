@@ -1,8 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
-import { ok, created, notFound } from '../utils/response';
-
-
+import { ok, created, notFound, badRequest } from '../utils/response';
 
 export async function listDeliveries(req: Request, res: Response) {
   const { status, from, to } = req.query;
@@ -20,13 +18,21 @@ export async function listDeliveries(req: Request, res: Response) {
 }
 
 export async function createDelivery(req: Request, res: Response) {
-  const { delivery_fee, ...deliveryData } = req.body;
+  const { delivery_fee, orderId, vehicle_plate, driver_name, scheduled_date, quantity_loaded, notes } = req.body;
+  if (!orderId) return badRequest(res, 'orderId is required');
+
+  const order = await prisma.order.findFirst({ where: { id: orderId, deletedAt: null } });
+  if (!order) return notFound(res, 'Order not found');
+
   const delivery = await prisma.delivery.create({
     data: {
-      ...deliveryData,
-      scheduled_date: deliveryData.scheduled_date ? new Date(deliveryData.scheduled_date) : undefined,
+      orderId,
+      vehicle_plate: vehicle_plate || null,
+      driver_name: driver_name || null,
+      scheduled_date: scheduled_date ? new Date(scheduled_date) : undefined,
+      quantity_loaded: quantity_loaded ? Number(quantity_loaded) : 0,
+      notes: notes || null,
       costs: {
-        // Store delivery_fee as driver_fee; fuel_cost and hired_truck_cost are zeroed out
         create: { fuel_cost: 0, driver_fee: Number(delivery_fee) || 0, hired_truck_cost: 0 },
       },
     },

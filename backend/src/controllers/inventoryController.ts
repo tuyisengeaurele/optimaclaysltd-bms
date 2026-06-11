@@ -1,16 +1,13 @@
 import { Request, Response } from 'express';
 import { MaterialType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { ok, created, notFound } from '../utils/response';
-
-
+import { ok, created, notFound, badRequest } from '../utils/response';
 
 export async function listRawMaterials(req: Request, res: Response) {
   const stocks = await prisma.rawMaterialStock.findMany({ orderBy: { date: 'desc' } });
   const consumptions = await prisma.rawMaterialConsumption.findMany();
   const thresholds = await prisma.stockThreshold.findMany();
 
-  // Calculate current stock per material
   const types = Object.values(MaterialType);
   const summary = types.map(type => {
     const totalIn = stocks.filter(s => s.material_type === type).reduce((s, r) => s + r.quantity, 0);
@@ -51,7 +48,18 @@ export async function listFinishedGoods(req: Request, res: Response) {
 }
 
 export async function addFinishedGoods(req: Request, res: Response) {
-  const stock = await prisma.finishedGoodsStock.create({ data: req.body });
+  const { brick_type, quality_grade, quantity, date, notes } = req.body;
+  if (!brick_type || quantity == null) return badRequest(res, 'brick_type and quantity are required');
+  if (!quality_grade) return badRequest(res, 'quality_grade is required');
+  const stock = await prisma.finishedGoodsStock.create({
+    data: {
+      brick_type,
+      quality_grade,
+      quantity: Number(quantity),
+      date: date ? new Date(date) : new Date(),
+      notes: notes || null,
+    },
+  });
   return created(res, stock);
 }
 

@@ -6,12 +6,12 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/', listPayrollRuns);
-router.post('/', createPayrollRun);
+router.post('/', authorize('ADMIN', 'ACCOUNTANT'), createPayrollRun);
 router.get('/:runId', getPayrollRun);
-router.put('/:runId/entries/:entryId', updateEntry);
-router.post('/:runId/finalize', finalizeRun);
+router.put('/:runId/entries/:entryId', authorize('ADMIN', 'ACCOUNTANT'), updateEntry);
+router.post('/:runId/finalize', authorize('ADMIN', 'ACCOUNTANT'), finalizeRun);
 router.delete('/:runId', authorize('ADMIN', 'ACCOUNTANT'), deletePayrollRun);
-router.get('/:runId/export', exportPayroll);
-router.get('/:runId/payslip/:employeeId', getPayslip);
+router.get('/:runId/export', authorize('ADMIN', 'ACCOUNTANT'), exportPayroll);
+router.get('/:runId/payslip/:employeeId', authorize('ADMIN', 'ACCOUNTANT'), getPayslip);
 
 export default router;

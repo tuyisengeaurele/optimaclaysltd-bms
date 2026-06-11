@@ -7,4 +7,3 @@ build/
 *.log
 coverage/
 .nyc_output/
-prisma/migrations/

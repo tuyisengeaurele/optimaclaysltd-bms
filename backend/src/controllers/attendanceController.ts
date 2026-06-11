@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
-import { ok, created, notFound } from '../utils/response';
+import { ok, created, notFound, badRequest } from '../utils/response';
 
 
 
@@ -57,8 +57,12 @@ export async function updateAttendance(req: Request, res: Response) {
 
 export async function getMonthlySummary(req: Request, res: Response) {
   const { employeeId, month, year } = req.query;
-  const start = new Date(Number(year), Number(month) - 1, 1);
-  const end = new Date(Number(year), Number(month), 1);
+  if (!employeeId || !month || !year) return badRequest(res, 'employeeId, month, and year are required');
+  const m = Number(month);
+  const y = Number(year);
+  if (isNaN(m) || isNaN(y) || m < 1 || m > 12) return badRequest(res, 'Invalid month or year');
+  const start = new Date(y, m - 1, 1);
+  const end = new Date(y, m, 1);
 
   const logs = await prisma.attendanceLog.findMany({
     where: { employeeId: employeeId as string, date: { gte: start, lt: end } },

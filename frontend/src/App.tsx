@@ -2,7 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './components/ui/Toast';
-import ProtectedRoute from './components/layout/ProtectedRoute';
+import ProtectedRoute, { RequireRole } from './components/layout/ProtectedRoute';
 import Layout from './components/layout/Layout';
 
 import LoginPage from './pages/LoginPage';
@@ -42,20 +42,81 @@ export default function App() {
             >
               <Route index element={<DashboardPage />} />
               <Route path="profile" element={<ProfilePage />} />
-              <Route path="employees" element={<EmployeesPage />} />
-              <Route path="attendance" element={<AttendancePage />} />
-              <Route path="payroll" element={<PayrollPage />} />
-              <Route path="payroll/:runId" element={<PayrollRunPage />} />
-              <Route path="production" element={<ProductionPage />} />
-              <Route path="inventory" element={<InventoryPage />} />
-              <Route path="customers" element={<CustomersPage />} />
-              <Route path="orders" element={<OrdersPage />} />
-              <Route path="invoices" element={<InvoicesPage />} />
-              <Route path="proformas" element={<ProformasPage />} />
-              <Route path="deliveries" element={<DeliveriesPage />} />
-              <Route path="financials" element={<FinancialsPage />} />
-              <Route path="reports" element={<ReportsPage />} />
-              <Route path="users" element={<UsersPage />} />
+
+              <Route path="employees" element={
+                <RequireRole roles={['ADMIN', 'ACCOUNTANT']}>
+                  <EmployeesPage />
+                </RequireRole>
+              } />
+              <Route path="attendance" element={
+                <RequireRole roles={['ADMIN', 'PRODUCTION_SUPERVISOR', 'ACCOUNTANT']}>
+                  <AttendancePage />
+                </RequireRole>
+              } />
+              <Route path="payroll" element={
+                <RequireRole roles={['ADMIN', 'ACCOUNTANT']}>
+                  <PayrollPage />
+                </RequireRole>
+              } />
+              <Route path="payroll/:runId" element={
+                <RequireRole roles={['ADMIN', 'ACCOUNTANT']}>
+                  <PayrollRunPage />
+                </RequireRole>
+              } />
+
+              <Route path="production" element={
+                <RequireRole roles={['ADMIN', 'PRODUCTION_SUPERVISOR']}>
+                  <ProductionPage />
+                </RequireRole>
+              } />
+              <Route path="inventory" element={
+                <RequireRole roles={['ADMIN', 'STORE_MANAGER', 'PRODUCTION_SUPERVISOR']}>
+                  <InventoryPage />
+                </RequireRole>
+              } />
+
+              <Route path="customers" element={
+                <RequireRole roles={['ADMIN', 'SALES_OFFICER', 'ACCOUNTANT']}>
+                  <CustomersPage />
+                </RequireRole>
+              } />
+              <Route path="orders" element={
+                <RequireRole roles={['ADMIN', 'SALES_OFFICER', 'ACCOUNTANT']}>
+                  <OrdersPage />
+                </RequireRole>
+              } />
+              <Route path="invoices" element={
+                <RequireRole roles={['ADMIN', 'SALES_OFFICER', 'ACCOUNTANT']}>
+                  <InvoicesPage />
+                </RequireRole>
+              } />
+              <Route path="proformas" element={
+                <RequireRole roles={['ADMIN', 'SALES_OFFICER', 'ACCOUNTANT']}>
+                  <ProformasPage />
+                </RequireRole>
+              } />
+              <Route path="deliveries" element={
+                <RequireRole roles={['ADMIN', 'SALES_OFFICER', 'STORE_MANAGER']}>
+                  <DeliveriesPage />
+                </RequireRole>
+              } />
+
+              <Route path="financials" element={
+                <RequireRole roles={['ADMIN', 'ACCOUNTANT']}>
+                  <FinancialsPage />
+                </RequireRole>
+              } />
+              <Route path="reports" element={
+                <RequireRole roles={['ADMIN', 'ACCOUNTANT']}>
+                  <ReportsPage />
+                </RequireRole>
+              } />
+
+              <Route path="users" element={
+                <RequireRole roles={['ADMIN']}>
+                  <UsersPage />
+                </RequireRole>
+              } />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
             <Route path="*" element={<NotFoundPage />} />

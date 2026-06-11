@@ -4,9 +4,20 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
+import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 
 dotenv.config();
+
+// Fail fast if critical secrets are missing
+if (!process.env.JWT_SECRET || !process.env.JWT_REFRESH_SECRET) {
+  console.error('FATAL: JWT_SECRET and JWT_REFRESH_SECRET must be set in .env');
+  process.exit(1);
+}
+if (!process.env.DATABASE_URL) {
+  console.error('FATAL: DATABASE_URL must be set in .env');
+  process.exit(1);
+}
 
 import authRoutes from './routes/authRoutes';
 import employeeRoutes from './routes/employeeRoutes';
@@ -23,16 +34,33 @@ import deliveryRoutes from './routes/deliveryRoutes';
 import expenseRoutes from './routes/expenseRoutes';
 import reportRoutes from './routes/reportRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
+import settingsRoutes from './routes/settingsRoutes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
 
+// Tight login rate limit: max 10 attempts per 15 minutes per IP
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many login attempts. Please try again in 15 minutes.' },
+});
+
+// General API rate limit: 300 requests per minute per IP
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many requests. Please slow down.' },
+});
+
 app.use(helmet());
 app.use(cors({
   origin: (origin, cb) => {
-    // Allow requests with no origin (Postman, server-to-server)
     if (!origin) return cb(null, true);
-    // In production use FRONTEND_URL exactly; in dev allow any localhost port
     if (process.env.NODE_ENV === 'production') {
       return cb(null, origin === process.env.FRONTEND_URL);
     }
@@ -42,9 +70,11 @@ app.use(cors({
   credentials: true,
 }));
 app.use(morgan('dev'));
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
+app.use('/api/v1', apiLimiter);
 
+app.use('/api/v1/auth/login', loginLimiter);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/employees', employeeRoutes);
 app.use('/api/v1/payroll', payrollRoutes);
@@ -60,6 +90,7 @@ app.use('/api/v1/deliveries', deliveryRoutes);
 app.use('/api/v1/expenses', expenseRoutes);
 app.use('/api/v1/reports', reportRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
+app.use('/api/v1/settings', settingsRoutes);
 
 app.use(errorHandler);
 

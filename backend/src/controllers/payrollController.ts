@@ -83,6 +83,7 @@ export async function updateEntry(req: Request, res: Response) {
 export async function finalizeRun(req: Request, res: Response) {
   const run = await prisma.payrollRun.findUnique({ where: { id: req.params.runId } });
   if (!run) return notFound(res, 'Payroll run not found');
+  if (run.finalized) return badRequest(res, 'Payroll run is already finalized');
   const updated = await prisma.payrollRun.update({
     where: { id: req.params.runId },
     data: { finalized: true },
@@ -159,8 +160,8 @@ export async function getPayslip(req: Request, res: Response) {
   // Read logo
   let logoHtml = '<div style="background:#C0392B;color:white;padding:20px;font-size:24px;font-weight:bold;">OPTIMA CLAYS LTD</div>';
   try {
-    const logoPath = process.env.LOGO_PATH || '';
-    if (logoPath && fs.existsSync(logoPath)) {
+    const logoPath = path.join(__dirname, '../../assets/logo.png');
+    if (fs.existsSync(logoPath)) {
       const ext = path.extname(logoPath).slice(1).replace('jpg', 'jpeg');
       const b64 = fs.readFileSync(logoPath).toString('base64');
       logoHtml = `<img src="data:image/${ext};base64,${b64}" style="height:80px;" />`;

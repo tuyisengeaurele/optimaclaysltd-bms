@@ -190,6 +190,7 @@ model ProductionBatch {
   current_stage    ProductionStage @default(RAW_MIXING)
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
+  deletedAt        DateTime?
 }
 
 model RawMaterialStock {
@@ -280,26 +281,42 @@ model Order {
   deliveries       Delivery[]
 }
 
+model CompanySettings {
+  id                      String   @id @default("singleton")
+  tin                     String   @default("")
+  bank_name               String   @default("")
+  bank_account            String   @default("")
+  phone                   String   @default("")
+  email                   String   @default("")
+  address                 String   @default("")
+  director_name           String   @default("")
+  director_title          String   @default("")
+  default_payment_terms   String   @default("")
+  default_delivery_period String   @default("")
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
 model ProformaInvoice {
-  id           String   @id @default(uuid())
-  number       String   @unique
-  customer     Customer @relation(fields: [customerId], references: [id])
-  customerId   String
-  // orderId is optional — proformas are created before an order exists
-  order        Order?   @relation(fields: [orderId], references: [id])
-  orderId      String?
-  // Standalone line-item fields (used when no order is linked)
-  brick_type   String?
-  custom_name  String?
-  quantity     Int?
-  unit_price   Float?
-  date_issued  DateTime @default(now())
-  valid_until  DateTime
-  subtotal     Float
-  total        Float
-  notes        String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id               String   @id @default(uuid())
+  number           String   @unique
+  customer         Customer @relation(fields: [customerId], references: [id])
+  customerId       String
+  order            Order?   @relation(fields: [orderId], references: [id])
+  orderId          String?
+  brick_type       String?
+  custom_name      String?
+  quantity         Int?
+  unit_price       Float?
+  date_issued      DateTime @default(now())
+  valid_until      DateTime
+  subtotal         Float
+  total            Float
+  notes            String?
+  payment_terms    String?
+  delivery_period  String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model Invoice {

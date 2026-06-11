@@ -27,7 +27,7 @@ export async function getDashboard(req: Request, res: Response) {
     prisma.productionBatch.findMany({ where: { date: { gte: today, lt: tomorrow } } }),
     prisma.finishedGoodsStock.findMany(),
     prisma.order.count({ where: { status: 'PENDING', deletedAt: null } }),
-    prisma.invoice.findMany({ include: { payments: true } }),
+    prisma.invoice.findMany({ where: { date: { gte: sixMonthsAgo } }, include: { payments: true } }),
     prisma.order.findMany({
       where: { deletedAt: null },
       include: { customer: true },

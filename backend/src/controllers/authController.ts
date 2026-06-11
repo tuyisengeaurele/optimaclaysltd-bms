@@ -4,13 +4,21 @@ import { prisma } from '../lib/prisma';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/jwt';
 import { ok, badRequest, unauthorized } from '../utils/response';
 
-
+const BCRYPT_ROUNDS = 12;
 
 const COOKIE_OPTS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax' as const,
+  sameSite: 'strict' as const,
 };
+
+function validatePasswordStrength(password: string): string | null {
+  if (!password || password.length < 8) return 'Password must be at least 8 characters';
+  if (!/[A-Z]/.test(password)) return 'Password must contain at least one uppercase letter';
+  if (!/[a-z]/.test(password)) return 'Password must contain at least one lowercase letter';
+  if (!/[0-9]/.test(password)) return 'Password must contain at least one number';
+  return null;
+}
 
 export async function login(req: Request, res: Response) {
   const { email, password } = req.body;
@@ -37,12 +45,10 @@ export async function login(req: Request, res: Response) {
 export async function refresh(req: Request, res: Response) {
   const token = req.cookies?.refreshToken;
   if (!token) return unauthorized(res, 'No refresh token');
-
   try {
     const decoded = verifyRefreshToken(token) as { id: string; email: string; role: string };
     const user = await prisma.user.findUnique({ where: { id: decoded.id } });
     if (!user || user.refreshToken !== token) return unauthorized(res, 'Invalid refresh token');
-
     const payload = { id: user.id, email: user.email, role: user.role };
     const accessToken = signAccessToken(payload);
     res.cookie('accessToken', accessToken, { ...COOKIE_OPTS, maxAge: 15 * 60 * 1000 });
@@ -70,13 +76,16 @@ export async function changePassword(req: Request, res: Response) {
   const userId = (req as any).user?.id;
   if (!userId) return unauthorized(res);
 
+  const strengthError = validatePasswordStrength(newPassword);
+  if (strengthError) return badRequest(res, strengthError);
+
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return unauthorized(res);
 
   const valid = await bcrypt.compare(currentPassword, user.password);
   if (!valid) return badRequest(res, 'Current password is incorrect');
 
-  const hashed = await bcrypt.hash(newPassword, 10);
+  const hashed = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
   await prisma.user.update({ where: { id: userId }, data: { password: hashed } });
   return ok(res, null, 'Password changed successfully');
 }
@@ -90,7 +99,7 @@ export async function getProfile(req: Request, res: Response) {
   return ok(res, user);
 }
 
-// ── User management (ADMIN only) ──────────────────────────────────────────────
+// ── User management (ADMIN only) ─────────────────────────────────────────────
 export async function listUsers(req: Request, res: Response) {
   const users = await prisma.user.findMany({
     select: { id: true, email: true, full_name: true, role: true, is_active: true, createdAt: true },
@@ -101,10 +110,16 @@ export async function listUsers(req: Request, res: Response) {
 
 export async function createUser(req: Request, res: Response) {
   const { email, password, full_name, role } = req.body;
-  if (!email || !password || !full_name || !role) return badRequest(res, 'email, password, full_name and role are required');
+  if (!email || !password || !full_name || !role) {
+    return badRequest(res, 'email, password, full_name and role are required');
+  }
+  const strengthError = validatePasswordStrength(password);
+  if (strengthError) return badRequest(res, strengthError);
+
   const exists = await prisma.user.findUnique({ where: { email } });
   if (exists) return badRequest(res, 'Email already in use');
-  const hashed = await bcrypt.hash(password, 10);
+
+  const hashed = await bcrypt.hash(password, BCRYPT_ROUNDS);
   const user = await prisma.user.create({
     data: { email, password: hashed, full_name, role },
     select: { id: true, email: true, full_name: true, role: true, is_active: true },
@@ -123,6 +138,7 @@ export async function updateProfile(req: Request, res: Response) {
     if (exists) return badRequest(res, 'Email already in use');
     data.email = email.trim();
   }
+  if (Object.keys(data).length === 0) return badRequest(res, 'No fields to update');
   const updated = await prisma.user.update({
     where: { id: userId },
     data,
@@ -140,7 +156,15 @@ export async function updateUser(req: Request, res: Response) {
   if (full_name !== undefined) data.full_name = full_name;
   if (role !== undefined) data.role = role;
   if (is_active !== undefined) data.is_active = is_active;
-  if (password) data.password = await bcrypt.hash(password, 10);
-  const updated = await prisma.user.update({ where: { id }, data, select: { id: true, email: true, full_name: true, role: true, is_active: true } });
+  if (password) {
+    const strengthError = validatePasswordStrength(password);
+    if (strengthError) return badRequest(res, strengthError);
+    data.password = await bcrypt.hash(password, BCRYPT_ROUNDS);
+  }
+  const updated = await prisma.user.update({
+    where: { id },
+    data,
+    select: { id: true, email: true, full_name: true, role: true, is_active: true },
+  });
   return ok(res, updated);
 }

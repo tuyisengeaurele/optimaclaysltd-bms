@@ -1,11 +1,10 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
-import { ok, created, notFound } from '../utils/response';
+import { ok, created, notFound, badRequest } from '../utils/response';
 
-
-
-function getNextInvoiceNumber(year: number, count: number) {
-  return `OCL-${year}-${String(count + 1).padStart(3, '0')}`;
+function computeIsOverdue(invoice: { due_date: Date | null; total: number }, paid: number): boolean {
+  if (!invoice.due_date) return false;
+  return new Date() > invoice.due_date && paid < invoice.total;
 }
 
 export async function listInvoices(req: Request, res: Response) {
@@ -15,47 +14,57 @@ export async function listInvoices(req: Request, res: Response) {
   });
   const result = invoices.map(inv => {
     const paid = inv.payments.reduce((s, p) => s + p.amount, 0);
-    return { ...inv, paid, balance: inv.total - paid };
+    const balance = inv.total - paid;
+    // Always compute is_overdue dynamically — don't rely on the stored flag
+    const is_overdue = computeIsOverdue(inv, paid);
+    return { ...inv, paid, balance, is_overdue };
   });
   return ok(res, result);
 }
 
 export async function createInvoice(req: Request, res: Response) {
   const { orderId, due_date } = req.body;
-  const order = await prisma.order.findUnique({ where: { id: orderId }, include: { customer: true } });
+  if (!orderId) return badRequest(res, 'orderId is required');
+
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, deletedAt: null },
+    include: { customer: true },
+  });
   if (!order) return notFound(res, 'Order not found');
 
   const year = new Date().getFullYear();
-  const count = await prisma.invoice.count({ where: { number: { startsWith: `OCL-${year}-` } } });
-  const number = getNextInvoiceNumber(year, count);
-
-  const invoice = await prisma.invoice.create({
-    data: {
-      number,
-      orderId,
-      due_date: due_date ? new Date(due_date) : undefined,
-      subtotal: order.total_amount,
-      total: order.total_amount,
-      items: {
-        create: [{
-          description: 'Bricks Supply',
-          brick_type: order.brick_type,
-          quality_grade: order.quality_grade,
-          quantity: order.quantity,
-          unit_price: order.unit_price,
-          total: order.total_amount,
-        }],
+  // Use a transaction so count + create are atomic — prevents duplicate numbers under concurrent requests
+  const invoice = await prisma.$transaction(async (tx) => {
+    const count = await tx.invoice.count({ where: { number: { startsWith: `OCL-${year}-` } } });
+    const number = `OCL-${year}-${String(count + 1).padStart(3, '0')}`;
+    return tx.invoice.create({
+      data: {
+        number,
+        orderId,
+        due_date: due_date ? new Date(due_date) : undefined,
+        subtotal: order.total_amount,
+        total: order.total_amount,
+        items: {
+          create: [{
+            description: 'Bricks Supply',
+            brick_type: order.brick_type,
+            quality_grade: order.quality_grade,
+            quantity: order.quantity,
+            unit_price: order.unit_price,
+            total: order.total_amount,
+          }],
+        },
       },
-    },
-    include: { items: true, order: { include: { customer: true } } },
+      include: { items: true, order: { include: { customer: true } } },
+    });
   });
+
   return created(res, invoice);
 }
 
 export async function deleteInvoice(req: Request, res: Response) {
   const invoice = await prisma.invoice.findUnique({ where: { id: req.params.id } });
   if (!invoice) return notFound(res, 'Invoice not found');
-  // Delete dependents first
   await prisma.payment.deleteMany({ where: { invoiceId: req.params.id } });
   await prisma.invoiceItem.deleteMany({ where: { invoiceId: req.params.id } });
   await prisma.invoice.delete({ where: { id: req.params.id } });
@@ -69,5 +78,6 @@ export async function getInvoice(req: Request, res: Response) {
   });
   if (!invoice) return notFound(res, 'Invoice not found');
   const paid = invoice.payments.reduce((s, p) => s + p.amount, 0);
-  return ok(res, { ...invoice, paid, balance: invoice.total - paid });
+  const is_overdue = computeIsOverdue(invoice, paid);
+  return ok(res, { ...invoice, paid, balance: invoice.total - paid, is_overdue });
 }

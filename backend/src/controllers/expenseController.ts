@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
-import { ok, created, notFound } from '../utils/response';
+import { ok, created, notFound, badRequest } from '../utils/response';
 
 
 
@@ -14,7 +14,19 @@ export async function listExpenses(req: Request, res: Response) {
 }
 
 export async function createExpense(req: Request, res: Response) {
-  const expense = await prisma.expense.create({ data: { ...req.body, date: new Date(req.body.date) } });
+  const { category, amount, date, description } = req.body;
+  if (!category) return badRequest(res, 'category is required');
+  if (amount == null || isNaN(Number(amount)) || Number(amount) <= 0) return badRequest(res, 'amount must be a positive number');
+  if (!date) return badRequest(res, 'date is required');
+
+  const expense = await prisma.expense.create({
+    data: {
+      category,
+      amount: Number(amount),
+      date: new Date(date),
+      description: description || null,
+    },
+  });
   return created(res, expense);
 }
 

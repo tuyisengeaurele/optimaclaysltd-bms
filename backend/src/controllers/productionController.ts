@@ -4,7 +4,7 @@ import { ok, created, notFound, badRequest } from '../utils/response';
 
 export async function listBatches(req: Request, res: Response) {
   const { from, to, page = '1', limit = '50' } = req.query;
-  const where: any = {};
+  const where: any = { deletedAt: null };
   if (from) where.date = { ...where.date, gte: new Date(from as string) };
   if (to) where.date = { ...where.date, lte: new Date(to as string) };
   const skip = (Number(page) - 1) * Number(limit);
@@ -27,7 +27,7 @@ export async function createBatch(req: Request, res: Response) {
 }
 
 export async function updateBatch(req: Request, res: Response) {
-  const batch = await prisma.productionBatch.findUnique({ where: { id: req.params.id } });
+  const batch = await prisma.productionBatch.findFirst({ where: { id: req.params.id, deletedAt: null } });
   if (!batch) return notFound(res, 'Production batch not found');
   const { date, shift, kiln_number, bricks_target, bricks_produced, bricks_rejected, rejection_reason, current_stage } = req.body;
   const updated = await prisma.productionBatch.update({
@@ -38,9 +38,9 @@ export async function updateBatch(req: Request, res: Response) {
 }
 
 export async function deleteBatch(req: Request, res: Response) {
-  const batch = await prisma.productionBatch.findUnique({ where: { id: req.params.id } });
+  const batch = await prisma.productionBatch.findFirst({ where: { id: req.params.id, deletedAt: null } });
   if (!batch) return notFound(res, 'Production batch not found');
-  await prisma.productionBatch.delete({ where: { id: req.params.id } });
+  await prisma.productionBatch.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });
   return ok(res, { deleted: true });
 }
 
@@ -49,7 +49,7 @@ export async function getStats(req: Request, res: Response) {
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
   const batches = await prisma.productionBatch.findMany({
-    where: { date: { gte: thirtyDaysAgo } },
+    where: { date: { gte: thirtyDaysAgo }, deletedAt: null },
     orderBy: { date: 'asc' },
   });
 
