@@ -116,7 +116,11 @@ export const orderApi = {
 // Proforma
 export const proformaApi = {
   list: () => api.get('/proforma'),
-  create: (data: { customerId: string; brick_type: string; custom_name?: string; quantity: number; unit_price: number; notes?: string; valid_until?: string }) => api.post('/proforma', data),
+  create: (data: {
+    customerId?: string; orderId?: string; brick_type?: string; custom_name?: string;
+    quantity?: number; unit_price?: number; notes?: string; valid_until?: string;
+    payment_terms?: string; delivery_period?: string;
+  }) => api.post('/proforma', data),
   get: (id: string) => api.get(`/proforma/${id}`),
   delete: (id: string) => api.delete(`/proforma/${id}`),
   printUrl: (id: string) => `${api.defaults.baseURL}/proforma/${id}/print`,
@@ -162,4 +166,13 @@ export const reportApi = {
 // Dashboard
 export const dashboardApi = {
   get: () => api.get('/dashboard'),
+};
+
+export const settingsApi = {
+  getCompany: () => api.get('/settings/company'),
+  updateCompany: (data: {
+    tin: string; bank_name: string; bank_account: string; phone: string; email: string;
+    address: string; director_name: string; director_title: string;
+    default_payment_terms: string; default_delivery_period: string;
+  }) => api.put('/settings/company', data),
 };

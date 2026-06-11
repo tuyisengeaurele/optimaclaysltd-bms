@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Printer, Trash2 } from 'lucide-react';
-import { proformaApi, customerApi } from '../services/api';
+import { proformaApi, customerApi, settingsApi } from '../services/api';
 import Modal from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { TableSkeleton } from '../components/ui/Skeleton';
@@ -20,6 +20,8 @@ const EMPTY_FORM = {
   unit_price: 0,
   notes: '',
   valid_until: '',
+  payment_terms: '',
+  delivery_period: '',
 };
 
 export default function ProformasPage() {
@@ -42,15 +44,31 @@ export default function ProformasPage() {
     queryFn: () => customerApi.list().then(r => r.data.data),
   });
 
+  const { data: companySettings } = useQuery({
+    queryKey: ['settings-company'],
+    queryFn: () => settingsApi.getCompany().then(r => r.data.data),
+  });
+
+  function openModal() {
+    setForm({
+      ...EMPTY_FORM,
+      payment_terms:   companySettings?.default_payment_terms   || '',
+      delivery_period: companySettings?.default_delivery_period || '',
+    });
+    setModal(true);
+  }
+
   const createProforma = useMutation({
     mutationFn: (data: typeof EMPTY_FORM) => proformaApi.create({
-      customerId: data.customerId,
-      brick_type: data.brick_type,
-      custom_name: data.custom_name || undefined,
-      quantity: Number(data.quantity),
-      unit_price: Number(data.unit_price),
-      notes: data.notes || undefined,
-      valid_until: data.valid_until || undefined,
+      customerId:      data.customerId,
+      brick_type:      data.brick_type,
+      custom_name:     data.custom_name  || undefined,
+      quantity:        Number(data.quantity),
+      unit_price:      Number(data.unit_price),
+      notes:           data.notes           || undefined,
+      valid_until:     data.valid_until      || undefined,
+      payment_terms:   data.payment_terms    || undefined,
+      delivery_period: data.delivery_period  || undefined,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['proformas'] });
@@ -77,12 +95,9 @@ export default function ProformasPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-accent">Proforma Invoices</h1>
-          <p className="text-sm text-gray-500 mt-1">Issue preliminary invoices / quotes to customers before confirming an order</p>
+          <p className="text-sm text-gray-500 mt-1">Issue preliminary invoices to customers before confirming an order</p>
         </div>
-        <button
-          className="btn-primary flex items-center gap-2"
-          onClick={() => { setForm({ ...EMPTY_FORM }); setModal(true); }}
-        >
+        <button className="btn-primary flex items-center gap-2" onClick={openModal}>
           <Plus size={16} /> New Proforma
         </button>
       </div>
@@ -155,7 +170,7 @@ export default function ProformasPage() {
         )}
       </div>
 
-      {/* ── Create proforma modal ── */}
+      {/* Create modal */}
       <Modal open={modal} onClose={() => setModal(false)} title="New Proforma Invoice" size="lg">
         <form onSubmit={e => { e.preventDefault(); createProforma.mutate(form); }} className="space-y-4">
 
@@ -209,14 +224,12 @@ export default function ProformasPage() {
             )}
           </div>
 
-          {/* Quantity & Unit price */}
+          {/* Quantity & price */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="label">Quantity (units) <span className="text-primary">*</span></label>
               <input
-                type="number"
-                className="input"
-                min={1}
+                type="number" className="input" min={1}
                 value={form.quantity}
                 onChange={e => setForm({ ...form, quantity: Number(e.target.value) })}
                 required
@@ -225,9 +238,7 @@ export default function ProformasPage() {
             <div>
               <label className="label">Unit Price (RWF) <span className="text-primary">*</span></label>
               <input
-                type="number"
-                className="input"
-                min={0}
+                type="number" className="input" min={0}
                 value={form.unit_price}
                 onChange={e => setForm({ ...form, unit_price: Number(e.target.value) })}
                 required
@@ -235,7 +246,7 @@ export default function ProformasPage() {
             </div>
           </div>
 
-          {/* Auto total preview */}
+          {/* Total preview */}
           {form.quantity > 0 && form.unit_price > 0 && (
             <div className="bg-background border border-border rounded-lg px-4 py-3 flex justify-between items-center text-sm">
               <span className="text-muted-foreground">{form.quantity.toLocaleString()} × {fmtRWF(form.unit_price)}</span>
@@ -243,29 +254,49 @@ export default function ProformasPage() {
             </div>
           )}
 
-          {/* Validity date (optional, defaults to +30 days) */}
+          {/* Validity */}
           <div>
-            <label className="label">
-              Valid Until <span className="text-xs text-muted-foreground">(optional, defaults to 30 days)</span>
-            </label>
+            <label className="label">Valid Until <span className="text-xs text-muted-foreground">(optional — defaults to 30 days)</span></label>
             <input
-              type="date"
-              className="input"
+              type="date" className="input"
               value={form.valid_until}
               onChange={e => setForm({ ...form, valid_until: e.target.value })}
               min={new Date().toISOString().slice(0, 10)}
             />
           </div>
 
-          {/* Notes */}
+          {/* Delivery period */}
           <div>
-            <label className="label">Notes / Payment Terms <span className="text-xs text-muted-foreground">(optional)</span></label>
+            <label className="label">Delivery Period</label>
+            <input
+              className="input"
+              value={form.delivery_period}
+              onChange={e => setForm({ ...form, delivery_period: e.target.value })}
+              placeholder="e.g. 45 days from receipt of advance payment"
+            />
+          </div>
+
+          {/* Payment terms */}
+          <div>
+            <label className="label">Payment Terms</label>
             <textarea
               className="input resize-none"
-              rows={3}
+              rows={2}
+              value={form.payment_terms}
+              onChange={e => setForm({ ...form, payment_terms: e.target.value })}
+              placeholder="e.g. 50% advance, 25% upon 75% completion, 25% before final delivery"
+            />
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="label">Additional Notes <span className="text-xs text-muted-foreground">(optional)</span></label>
+            <textarea
+              className="input resize-none"
+              rows={2}
               value={form.notes}
               onChange={e => setForm({ ...form, notes: e.target.value })}
-              placeholder="Delivery conditions, payment terms, special instructions..."
+              placeholder="Special instructions, scope of supply, etc."
             />
           </div>
 
