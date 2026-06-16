@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { LogOut, Settings, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import NotificationBell from '../ui/NotificationBell';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -30,6 +31,7 @@ export default function Navbar() {
               <div className="text-muted-foreground text-xs">{user?.role?.replace(/_/g, ' ')}</div>
             </div>
           </div>
+          <NotificationBell />
           <Link to="/settings" title="Settings" className="p-1.5 hover:bg-background rounded-lg transition-colors text-muted-foreground hover:text-accent">
             <Settings size={16} />
           </Link>

@@ -9,7 +9,6 @@ api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
-    // Never try to refresh when the failing request IS the refresh/login/logout call
     const isAuthMutationEndpoint =
       original?.url?.includes('/auth/refresh') ||
       original?.url?.includes('/auth/login') ||
@@ -19,11 +18,8 @@ api.interceptors.response.use(
       original._retry = true;
       try {
         await api.post('/auth/refresh');
-        // Token refreshed — replay the original request
         return api(original);
       } catch {
-        // Both tokens expired — notify AuthContext via custom event so React
-        // Router can do a clean client-side redirect (no full page reload).
         window.dispatchEvent(new CustomEvent('auth:session-expired'));
       }
     }
@@ -33,7 +29,6 @@ api.interceptors.response.use(
 
 export default api;
 
-// Auth
 export const authApi = {
   login: (data: { email: string; password: string }) => api.post('/auth/login', data),
   logout: () => api.post('/auth/logout'),
@@ -41,13 +36,11 @@ export const authApi = {
   getProfile: () => api.get('/auth/profile'),
   changePassword: (data: { currentPassword: string; newPassword: string }) => api.put('/auth/change-password', data),
   updateProfile: (data: { full_name?: string; email?: string }) => api.put('/auth/profile', data),
-  // User management (ADMIN only)
   listUsers: () => api.get('/auth/users'),
   createUser: (data: any) => api.post('/auth/users', data),
   updateUser: (id: string, data: any) => api.put(`/auth/users/${id}`, data),
 };
 
-// Employees
 export const employeeApi = {
   list: () => api.get('/employees'),
   get: (id: string) => api.get(`/employees/${id}`),
@@ -56,7 +49,6 @@ export const employeeApi = {
   delete: (id: string) => api.delete(`/employees/${id}`),
 };
 
-// Payroll
 export const payrollApi = {
   list: () => api.get('/payroll'),
   get: (runId: string) => api.get(`/payroll/${runId}`),
@@ -68,7 +60,6 @@ export const payrollApi = {
   payslipUrl: (runId: string, employeeId: string) => `${api.defaults.baseURL}/payroll/${runId}/payslip/${employeeId}`,
 };
 
-// Attendance
 export const attendanceApi = {
   list: (params?: any) => api.get('/attendance', { params }),
   create: (data: any) => api.post('/attendance', data),
@@ -76,7 +67,6 @@ export const attendanceApi = {
   summary: (params: any) => api.get('/attendance/summary', { params }),
 };
 
-// Production
 export const productionApi = {
   list: (params?: any) => api.get('/production', { params }),
   stats: () => api.get('/production/stats'),
@@ -85,7 +75,13 @@ export const productionApi = {
   delete: (id: string) => api.delete(`/production/${id}`),
 };
 
-// Inventory
+export const kilnApi = {
+  list: () => api.get('/kilns'),
+  create: (data: any) => api.post('/kilns', data),
+  update: (id: string, data: any) => api.put(`/kilns/${id}`, data),
+  delete: (id: string) => api.delete(`/kilns/${id}`),
+};
+
 export const inventoryApi = {
   listRaw: () => api.get('/inventory/raw-materials'),
   addRaw: (data: any) => api.post('/inventory/raw-materials', data),
@@ -95,7 +91,19 @@ export const inventoryApi = {
   setThreshold: (data: any) => api.post('/inventory/thresholds', data),
 };
 
-// Customers
+export const supplierApi = {
+  list: () => api.get('/suppliers'),
+  create: (data: any) => api.post('/suppliers', data),
+  update: (id: string, data: any) => api.put(`/suppliers/${id}`, data),
+  delete: (id: string) => api.delete(`/suppliers/${id}`),
+};
+
+export const reconciliationApi = {
+  list: () => api.get('/reconciliations'),
+  get: (id: string) => api.get(`/reconciliations/${id}`),
+  create: (data: any) => api.post('/reconciliations', data),
+};
+
 export const customerApi = {
   list: () => api.get('/customers'),
   get: (id: string) => api.get(`/customers/${id}`),
@@ -104,16 +112,22 @@ export const customerApi = {
   delete: (id: string) => api.delete(`/customers/${id}`),
 };
 
-// Orders
 export const orderApi = {
   list: () => api.get('/orders'),
   get: (id: string) => api.get(`/orders/${id}`),
   create: (data: any) => api.post('/orders', data),
+  update: (id: string, data: any) => api.put(`/orders/${id}`, data),
   updateStatus: (id: string, data: any) => api.put(`/orders/${id}/status`, data),
   delete: (id: string) => api.delete(`/orders/${id}`),
+  getStatement: (customerId: string) => api.get(`/orders/statement/${customerId}`),
 };
 
-// Proforma
+export const priceCatalogueApi = {
+  list: () => api.get('/price-catalogue'),
+  upsert: (data: any) => api.post('/price-catalogue', data),
+  delete: (id: string) => api.delete(`/price-catalogue/${id}`),
+};
+
 export const proformaApi = {
   list: () => api.get('/proforma'),
   create: (data: {
@@ -126,7 +140,6 @@ export const proformaApi = {
   printUrl: (id: string) => `${api.defaults.baseURL}/proforma/${id}/print`,
 };
 
-// Invoices
 export const invoiceApi = {
   list: () => api.get('/invoices'),
   get: (id: string) => api.get(`/invoices/${id}`),
@@ -134,45 +147,74 @@ export const invoiceApi = {
   delete: (id: string) => api.delete(`/invoices/${id}`),
 };
 
-// Payments
 export const paymentApi = {
   list: (params?: any) => api.get('/payments', { params }),
   create: (data: any) => api.post('/payments', data),
 };
 
-// Deliveries
 export const deliveryApi = {
   list: (params?: any) => api.get('/deliveries', { params }),
   create: (data: any) => api.post('/deliveries', data),
   updateStatus: (id: string, data: any) => api.put(`/deliveries/${id}/status`, data),
+  recordDamage: (id: string, data: any) => api.put(`/deliveries/${id}/damage`, data),
   delete: (id: string) => api.delete(`/deliveries/${id}`),
+  waybillUrl: (id: string) => `${api.defaults.baseURL}/deliveries/${id}/waybill`,
 };
 
-// Expenses
 export const expenseApi = {
   list: (params?: any) => api.get('/expenses', { params }),
   create: (data: any) => api.post('/expenses', data),
   delete: (id: string) => api.delete(`/expenses/${id}`),
 };
 
-// Reports
+export const expenseCategoryApi = {
+  list: () => api.get('/expense-categories'),
+  create: (data: { name: string }) => api.post('/expense-categories', data),
+  update: (id: string, data: any) => api.put(`/expense-categories/${id}`, data),
+  delete: (id: string) => api.delete(`/expense-categories/${id}`),
+};
+
 export const reportApi = {
   production: (params?: any) => api.get('/reports/production', { params }),
   sales: (params?: any) => api.get('/reports/sales', { params }),
   payroll: (params?: any) => api.get('/reports/payroll', { params }),
   financials: (params?: any) => api.get('/reports/financials', { params }),
+  exportInvoicesUrl: (params?: any) => {
+    const q = new URLSearchParams(params).toString();
+    return `${api.defaults.baseURL}/reports/export/invoices${q ? '?' + q : ''}`;
+  },
+  exportExpensesUrl: (params?: any) => {
+    const q = new URLSearchParams(params).toString();
+    return `${api.defaults.baseURL}/reports/export/expenses${q ? '?' + q : ''}`;
+  },
+  exportPaymentsUrl: (params?: any) => {
+    const q = new URLSearchParams(params).toString();
+    return `${api.defaults.baseURL}/reports/export/payments${q ? '?' + q : ''}`;
+  },
 };
 
-// Dashboard
 export const dashboardApi = {
   get: () => api.get('/dashboard'),
 };
 
 export const settingsApi = {
   getCompany: () => api.get('/settings/company'),
-  updateCompany: (data: {
-    tin: string; bank_name: string; bank_account: string; phone: string; email: string;
-    address: string; director_name: string; director_title: string;
-    default_payment_terms: string; default_delivery_period: string;
-  }) => api.put('/settings/company', data),
+  updateCompany: (data: any) => api.put('/settings/company', data),
+  getPinnedKpis: () => api.get('/settings/kpis'),
+  updatePinnedKpis: (pinned_kpis: string[]) => api.put('/settings/kpis', { pinned_kpis }),
+};
+
+export const auditApi = {
+  list: (params?: any) => api.get('/audit', { params }),
+};
+
+export const notificationApi = {
+  get: () => api.get('/notifications'),
+  markRead: (ids: string[] | 'all') => api.post('/notifications/read', { ids }),
+  generate: () => api.post('/notifications/generate'),
+};
+
+export const importApi = {
+  customers: (csv: string) => api.post('/import/customers', { csv }),
+  employees: (csv: string) => api.post('/import/employees', { csv }),
 };

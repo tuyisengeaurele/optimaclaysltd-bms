@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, FileText, Trash2 } from 'lucide-react';
-import { orderApi, customerApi, proformaApi } from '../services/api';
+import { Plus, FileText, Trash2, Pencil } from 'lucide-react';
+import { orderApi, customerApi, proformaApi, priceCatalogueApi } from '../services/api';
 import { Order } from '../types';
 import Modal from '../components/ui/Modal';
 import Badge, { statusBadge } from '../components/ui/Badge';
@@ -23,10 +23,16 @@ export default function OrdersPage() {
   const { toast } = useToast();
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
-  const [modal, setModal] = useState<'create' | 'status' | null>(null);
+  const [modal, setModal] = useState<'create' | 'edit' | 'status' | null>(null);
   const [selected, setSelected] = useState<Order | null>(null);
   const [form, setForm] = useState<any>(EMPTY);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const { data: catalogue = [] } = useQuery({
+    queryKey: ['price-catalogue'],
+    queryFn: () => priceCatalogueApi.list().then(r => r.data.data),
+  });
+  const priceMap = Object.fromEntries((catalogue as any[]).map((p: any) => [p.brick_type, p.unit_price]));
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ['orders'],
@@ -56,6 +62,12 @@ export default function OrdersPage() {
     onError: err => toast(getErrorMessage(err), 'error'),
   });
 
+  const updateOrder = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => orderApi.update(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['orders'] }); toast('Order updated', 'success'); setModal(null); },
+    onError: err => toast(getErrorMessage(err), 'error'),
+  });
+
   const generateProforma = useMutation({
     mutationFn: (orderId: string) => proformaApi.create({ orderId }),
     onSuccess: (res) => {
@@ -65,6 +77,31 @@ export default function OrdersPage() {
     },
     onError: err => toast(getErrorMessage(err), 'error'),
   });
+
+  function openEdit(o: Order) {
+    setSelected(o);
+    setForm({
+      customerId: (o as any).customerId || '',
+      brick_type: o.brick_type,
+      quality_grade: o.quality_grade,
+      quantity: o.quantity,
+      unit_price: o.unit_price,
+      order_date: o.order_date?.slice(0, 10),
+      required_delivery_date: (o as any).required_delivery_date?.slice(0, 10) || '',
+      notes: o.notes || '',
+      custom_name: (o as any).custom_name || '',
+    });
+    setModal('edit');
+  }
+
+  function handleBrickTypeChange(brick_type: string) {
+    const cataloguePrice = priceMap[brick_type];
+    setForm((f: any) => ({
+      ...f,
+      brick_type,
+      ...(cataloguePrice != null && f.unit_price === 0 ? { unit_price: cataloguePrice } : {}),
+    }));
+  }
 
   const totalAmount = (form.quantity || 0) * (form.unit_price || 0);
 
@@ -99,12 +136,20 @@ export default function OrdersPage() {
                     <td className="px-3 py-3 text-muted-foreground">{fmtDate(o.order_date)}</td>
                     <td className="px-3 py-3"><Badge variant={statusBadge(o.status)}>{o.status}</Badge></td>
                     <td className="px-3 py-3">
-                      <div className="flex gap-1 items-center">
+                      <div className="flex gap-1 items-center flex-wrap">
                         <button title="Update Status" onClick={() => { setSelected(o); setModal('status'); }} className="text-xs text-primary hover:underline">Status</button>
                         <span className="text-muted-foreground">·</span>
                         <button title="Proforma Invoice" onClick={() => generateProforma.mutate(o.id)} className="text-xs text-accent hover:underline flex items-center gap-1">
                           <FileText size={11} /> PRO
                         </button>
+                        {o.status === 'PENDING' && (
+                          <>
+                            <span className="text-muted-foreground">·</span>
+                            <button title="Amend Order" onClick={() => openEdit(o)} className="text-xs text-amber-600 hover:underline flex items-center gap-1">
+                              <Pencil size={11} /> Edit
+                            </button>
+                          </>
+                        )}
                         {isAdmin && (
                           <>
                             <span className="text-muted-foreground">·</span>
@@ -124,57 +169,73 @@ export default function OrdersPage() {
         )}
       </div>
 
-      {/* Create Order Modal */}
-      <Modal open={modal === 'create'} onClose={() => setModal(null)} title="New Order" size="lg">
-        <form onSubmit={e => { e.preventDefault(); createOrder.mutate({ ...form, total_amount: totalAmount }); }} className="space-y-4">
-          <div>
-            <label className="label">Customer <span className="text-primary">*</span></label>
-            <select className="input" value={form.customerId} onChange={e => setForm({ ...form, customerId: e.target.value })} required>
-              <option value="">-- Select Customer --</option>
-              {customers.map((c: any) => <option key={c.id} value={c.id}>{c.company_name || c.full_name}</option>)}
-            </select>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label">Brick Type</label>
-              <select className="input" value={form.brick_type} onChange={e => setForm({ ...form, brick_type: e.target.value })}>
-                {BRICK_TYPES.map(b => <option key={b} value={b}>{PRODUCTS[b].name}{b !== 'CUSTOM' ? ` (${PRODUCTS[b].dimensions})` : ''}</option>)}
-              </select>
-            </div>
-            {form.brick_type === 'CUSTOM' && (
-              <div><label className="label">Custom Name</label><input className="input" value={form.custom_name || ''} onChange={e => setForm({ ...form, custom_name: e.target.value })} /></div>
+      {/* Create / Edit Order Modal */}
+      {(modal === 'create' || modal === 'edit') && (
+        <Modal open onClose={() => setModal(null)} title={modal === 'edit' ? 'Amend Order' : 'New Order'} size="lg">
+          <form onSubmit={e => {
+            e.preventDefault();
+            if (modal === 'edit' && selected) {
+              updateOrder.mutate({ id: selected.id, data: { ...form, total_amount: totalAmount } });
+            } else {
+              createOrder.mutate({ ...form, total_amount: totalAmount });
+            }
+          }} className="space-y-4">
+            {modal === 'edit' && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
+                Amendments are only allowed on PENDING orders.
+              </div>
             )}
             <div>
-              <label className="label">Quality Grade</label>
-              <select className="input" value={form.quality_grade} onChange={e => setForm({ ...form, quality_grade: e.target.value })}>
-                {GRADES.map(g => <option key={g}>{g}</option>)}
+              <label className="label">Customer <span className="text-primary">*</span></label>
+              <select className="input" value={form.customerId} onChange={e => setForm({ ...form, customerId: e.target.value })} required disabled={modal === 'edit'}>
+                <option value="">-- Select Customer --</option>
+                {customers.map((c: any) => <option key={c.id} value={c.id}>{c.company_name || c.full_name}</option>)}
               </select>
             </div>
-            <div>
-              <label className="label">Quantity</label>
-              <input type="number" className="input" value={form.quantity} onChange={e => setForm({ ...form, quantity: Number(e.target.value) })} required />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="label">Brick Type</label>
+                <select className="input" value={form.brick_type} onChange={e => handleBrickTypeChange(e.target.value)}>
+                  {BRICK_TYPES.map(b => <option key={b} value={b}>{PRODUCTS[b].name}{b !== 'CUSTOM' ? ` (${PRODUCTS[b].dimensions})` : ''}</option>)}
+                </select>
+              </div>
+              {form.brick_type === 'CUSTOM' && (
+                <div><label className="label">Custom Name</label><input className="input" value={form.custom_name || ''} onChange={e => setForm({ ...form, custom_name: e.target.value })} /></div>
+              )}
+              <div>
+                <label className="label">Quality Grade</label>
+                <select className="input" value={form.quality_grade} onChange={e => setForm({ ...form, quality_grade: e.target.value })}>
+                  {GRADES.map(g => <option key={g}>{g}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Quantity</label>
+                <input type="number" className="input" value={form.quantity} onChange={e => setForm({ ...form, quantity: Number(e.target.value) })} required />
+              </div>
+              <div>
+                <label className="label">Unit Price (RWF){priceMap[form.brick_type] && <span className="ml-1 text-xs text-muted-foreground">(catalogue: {fmtRWF(priceMap[form.brick_type])})</span>}</label>
+                <input type="number" className="input" value={form.unit_price} onChange={e => setForm({ ...form, unit_price: Number(e.target.value) })} required />
+              </div>
             </div>
-            <div>
-              <label className="label">Unit Price (RWF)</label>
-              <input type="number" className="input" value={form.unit_price} onChange={e => setForm({ ...form, unit_price: Number(e.target.value) })} required />
+            {totalAmount > 0 && (
+              <div className="bg-background p-3 rounded-lg text-sm">
+                <strong>Total Amount:</strong> {fmtRWF(totalAmount)}
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-4">
+              <div><label className="label">Order Date</label><input type="date" className="input" value={form.order_date} onChange={e => setForm({ ...form, order_date: e.target.value })} /></div>
+              <div><label className="label">Required Delivery Date</label><input type="date" className="input" value={form.required_delivery_date} onChange={e => setForm({ ...form, required_delivery_date: e.target.value })} /></div>
             </div>
-          </div>
-          {totalAmount > 0 && (
-            <div className="bg-background p-3 rounded-lg text-sm">
-              <strong>Total Amount:</strong> {fmtRWF(totalAmount)}
+            <div><label className="label">Notes</label><textarea className="input" rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
+            <div className="flex gap-3 justify-end pt-2 border-t border-border">
+              <button type="button" className="btn-outline" onClick={() => setModal(null)}>Cancel</button>
+              <button type="submit" className="btn-primary" disabled={createOrder.isPending || updateOrder.isPending}>
+                {createOrder.isPending || updateOrder.isPending ? 'Saving...' : modal === 'edit' ? 'Save Changes' : 'Create Order'}
+              </button>
             </div>
-          )}
-          <div className="grid grid-cols-2 gap-4">
-            <div><label className="label">Order Date</label><input type="date" className="input" value={form.order_date} onChange={e => setForm({ ...form, order_date: e.target.value })} /></div>
-            <div><label className="label">Required Delivery Date</label><input type="date" className="input" value={form.required_delivery_date} onChange={e => setForm({ ...form, required_delivery_date: e.target.value })} /></div>
-          </div>
-          <div><label className="label">Notes</label><textarea className="input" rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
-          <div className="flex gap-3 justify-end pt-2 border-t border-border">
-            <button type="button" className="btn-outline" onClick={() => setModal(null)}>Cancel</button>
-            <button type="submit" className="btn-primary" disabled={createOrder.isPending}>{createOrder.isPending ? 'Creating...' : 'Create Order'}</button>
-          </div>
-        </form>
-      </Modal>
+          </form>
+        </Modal>
+      )}
 
       <ConfirmDialog
         open={!!deleteId}

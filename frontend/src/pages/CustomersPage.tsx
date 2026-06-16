@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, FileText } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { customerApi } from '../services/api';
 import { Customer } from '../types';
 import Modal from '../components/ui/Modal';
@@ -8,9 +9,9 @@ import ConfirmDialog from '../components/ui/ConfirmDialog';
 import Badge from '../components/ui/Badge';
 import { useToast } from '../components/ui/Toast';
 import { TableSkeleton } from '../components/ui/Skeleton';
-import { getErrorMessage } from '../hooks/useToastHelper';
+import { getErrorMessage, fmtRWF } from '../hooks/useToastHelper';
 
-const EMPTY = { customer_type: 'INDIVIDUAL', full_name: '', phone: '', company_name: '', tin_number: '', contact_person_name: '', contact_person_phone: '', location: '', notes: '' };
+const EMPTY = { customer_type: 'INDIVIDUAL', full_name: '', phone: '', company_name: '', tin_number: '', contact_person_name: '', contact_person_phone: '', location: '', notes: '', credit_limit: 0 };
 
 export default function CustomersPage() {
   const qc = useQueryClient();
@@ -70,33 +71,37 @@ export default function CustomersPage() {
 
       <div className="card">
         {isLoading ? <TableSkeleton /> : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="table-header">
-                {['Type','Name / Company','Contact','TIN','Location','Actions'].map(h => (
-                  <th key={h} className="px-3 py-3 text-left first:rounded-l last:rounded-r">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((c: Customer) => (
-                <tr key={c.id} className="border-b border-border hover:bg-background">
-                  <td className="px-3 py-3"><Badge variant={c.customer_type === 'COMPANY' ? 'info' : 'default'}>{c.customer_type}</Badge></td>
-                  <td className="px-3 py-3 font-medium">{c.company_name || c.full_name || '-'}</td>
-                  <td className="px-3 py-3 text-muted-foreground">{c.contact_person_phone || c.phone || '-'}</td>
-                  <td className="px-3 py-3 font-mono text-xs">{c.tin_number || '-'}</td>
-                  <td className="px-3 py-3 text-muted-foreground">{c.location || '-'}</td>
-                  <td className="px-3 py-3">
-                    <div className="flex gap-2">
-                      <button onClick={() => openEdit(c)} className="p-1.5 hover:bg-background rounded text-accent"><Pencil size={14} /></button>
-                      <button onClick={() => setDeleteId(c.id)} className="p-1.5 hover:bg-background rounded text-danger"><Trash2 size={14} /></button>
-                    </div>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="table-header">
+                  {['Type','Name / Company','Contact','TIN','Location','Credit Limit','Actions'].map(h => (
+                    <th key={h} className="px-3 py-3 text-left first:rounded-l last:rounded-r">{h}</th>
+                  ))}
                 </tr>
-              ))}
-              {customers.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">No customers yet</td></tr>}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filtered.map((c: Customer) => (
+                  <tr key={c.id} className="border-b border-border hover:bg-background">
+                    <td className="px-3 py-3"><Badge variant={c.customer_type === 'COMPANY' ? 'info' : 'default'}>{c.customer_type}</Badge></td>
+                    <td className="px-3 py-3 font-medium">{c.company_name || c.full_name || '-'}</td>
+                    <td className="px-3 py-3 text-muted-foreground">{c.contact_person_phone || c.phone || '-'}</td>
+                    <td className="px-3 py-3 font-mono text-xs">{c.tin_number || '-'}</td>
+                    <td className="px-3 py-3 text-muted-foreground">{c.location || '-'}</td>
+                    <td className="px-3 py-3 text-sm">{(c as any).credit_limit > 0 ? fmtRWF((c as any).credit_limit) : <span className="text-muted-foreground">None</span>}</td>
+                    <td className="px-3 py-3">
+                      <div className="flex gap-2 items-center">
+                        <Link to={`/customers/${c.id}/statement`} className="p-1.5 hover:bg-background rounded text-primary" title="View Statement"><FileText size={14} /></Link>
+                        <button onClick={() => openEdit(c)} className="p-1.5 hover:bg-background rounded text-accent" title="Edit"><Pencil size={14} /></button>
+                        <button onClick={() => setDeleteId(c.id)} className="p-1.5 hover:bg-background rounded text-danger" title="Delete"><Trash2 size={14} /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {customers.length === 0 && <tr><td colSpan={7} className="px-3 py-6 text-center text-muted-foreground">No customers yet</td></tr>}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -130,6 +135,7 @@ export default function CustomersPage() {
             </>
           )}
           <div><label className="label">Location / Address</label><input className="input" value={form.location || ''} onChange={e => setForm({ ...form, location: e.target.value })} /></div>
+          <div><label className="label">Credit Limit (RWF) <span className="text-xs text-muted-foreground">— 0 means no limit</span></label><input type="number" min={0} className="input" value={form.credit_limit || 0} onChange={e => setForm({ ...form, credit_limit: Number(e.target.value) })} /></div>
           <div><label className="label">Notes</label><textarea className="input" rows={2} value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
           <div className="flex gap-3 justify-end pt-2 border-t border-border">
             <button type="button" className="btn-outline" onClick={() => setModal(null)}>Cancel</button>

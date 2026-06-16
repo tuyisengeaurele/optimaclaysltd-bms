@@ -13,14 +13,21 @@ import AttendancePage from './pages/AttendancePage';
 import PayrollPage from './pages/PayrollPage';
 import PayrollRunPage from './pages/PayrollRunPage';
 import ProductionPage from './pages/ProductionPage';
+import KilnsPage from './pages/KilnsPage';
 import InventoryPage from './pages/InventoryPage';
+import SuppliersPage from './pages/SuppliersPage';
+import ReconciliationPage from './pages/ReconciliationPage';
 import CustomersPage from './pages/CustomersPage';
+import CustomerStatementPage from './pages/CustomerStatementPage';
 import OrdersPage from './pages/OrdersPage';
+import PriceCataloguePage from './pages/PriceCataloguePage';
 import InvoicesPage from './pages/InvoicesPage';
 import ProformasPage from './pages/ProformasPage';
 import DeliveriesPage from './pages/DeliveriesPage';
 import FinancialsPage from './pages/FinancialsPage';
 import ReportsPage from './pages/ReportsPage';
+import ImportPage from './pages/ImportPage';
+import AuditLogPage from './pages/AuditLogPage';
 import UsersPage from './pages/UsersPage';
 import SettingsPage from './pages/SettingsPage';
 import NotFoundPage from './pages/NotFoundPage';
@@ -69,9 +76,24 @@ export default function App() {
                   <ProductionPage />
                 </RequireRole>
               } />
+              <Route path="kilns" element={
+                <RequireRole roles={['ADMIN', 'PRODUCTION_SUPERVISOR']}>
+                  <KilnsPage />
+                </RequireRole>
+              } />
               <Route path="inventory" element={
                 <RequireRole roles={['ADMIN', 'STORE_MANAGER', 'PRODUCTION_SUPERVISOR']}>
                   <InventoryPage />
+                </RequireRole>
+              } />
+              <Route path="suppliers" element={
+                <RequireRole roles={['ADMIN', 'STORE_MANAGER']}>
+                  <SuppliersPage />
+                </RequireRole>
+              } />
+              <Route path="reconciliation" element={
+                <RequireRole roles={['ADMIN', 'STORE_MANAGER']}>
+                  <ReconciliationPage />
                 </RequireRole>
               } />
 
@@ -80,9 +102,19 @@ export default function App() {
                   <CustomersPage />
                 </RequireRole>
               } />
+              <Route path="customers/:customerId/statement" element={
+                <RequireRole roles={['ADMIN', 'SALES_OFFICER', 'ACCOUNTANT']}>
+                  <CustomerStatementPage />
+                </RequireRole>
+              } />
               <Route path="orders" element={
                 <RequireRole roles={['ADMIN', 'SALES_OFFICER', 'ACCOUNTANT']}>
                   <OrdersPage />
+                </RequireRole>
+              } />
+              <Route path="price-catalogue" element={
+                <RequireRole roles={['ADMIN', 'SALES_OFFICER']}>
+                  <PriceCataloguePage />
                 </RequireRole>
               } />
               <Route path="invoices" element={
@@ -109,6 +141,16 @@ export default function App() {
               <Route path="reports" element={
                 <RequireRole roles={['ADMIN', 'ACCOUNTANT']}>
                   <ReportsPage />
+                </RequireRole>
+              } />
+              <Route path="import" element={
+                <RequireRole roles={['ADMIN']}>
+                  <ImportPage />
+                </RequireRole>
+              } />
+              <Route path="audit" element={
+                <RequireRole roles={['ADMIN']}>
+                  <AuditLogPage />
                 </RequireRole>
               } />
 

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
-import { productionApi } from '../services/api';
+import { productionApi, kilnApi } from '../services/api';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { ProductionBatch } from '../types';
 import Modal from '../components/ui/Modal';
@@ -13,8 +13,10 @@ import { getErrorMessage, fmtDate } from '../hooks/useToastHelper';
 
 const SHIFTS = ['MORNING', 'AFTERNOON', 'NIGHT'];
 const STAGES = ['RAW_MIXING','MOLDING','DRYING','KILN_FIRING','QUALITY_CHECK','STOCKPILED'];
+const DEFECT_TYPES = ['CRACKING','UNDER_FIRING','OVER_FIRING','DIMENSION_ERROR','COLOUR_VARIATION','OTHER'];
+const DISPOSITIONS = ['REWORK','DOWNGRADE_TO_B','DISPOSE'];
 
-const EMPTY = { date: new Date().toISOString().slice(0,10), shift: 'MORNING', kiln_number: '', bricks_target: 0, bricks_produced: 0, bricks_rejected: 0, rejection_reason: '', current_stage: 'RAW_MIXING' };
+const EMPTY = { date: new Date().toISOString().slice(0,10), shift: 'MORNING', kilnId: '', kiln_number: '', bricks_target: 0, bricks_produced: 0, bricks_rejected: 0, rejection_reason: '', current_stage: 'RAW_MIXING', defect_types: [] as string[], reject_disposition: '' };
 
 export default function ProductionPage() {
   const qc = useQueryClient();
@@ -36,6 +38,11 @@ export default function ProductionPage() {
   const { data: stats } = useQuery({
     queryKey: ['production-stats'],
     queryFn: () => productionApi.stats().then(r => r.data.data),
+  });
+
+  const { data: kilns = [] } = useQuery({
+    queryKey: ['kilns'],
+    queryFn: () => kilnApi.list().then(r => r.data.data),
   });
 
   const save = useMutation({
@@ -60,7 +67,14 @@ export default function ProductionPage() {
   });
 
   function openCreate() { setSelected(null); setForm({ ...EMPTY }); setModal('create'); }
-  function openEdit(b: ProductionBatch) { setSelected(b); setForm({ ...b, date: b.date.slice(0,10) }); setModal('edit'); }
+  function openEdit(b: ProductionBatch) { setSelected(b); setForm({ ...b, date: b.date.slice(0,10), kilnId: (b as any).kilnId || '', defect_types: (b as any).defect_types || [], reject_disposition: (b as any).reject_disposition || '' }); setModal('edit'); }
+
+  function toggleDefect(defect: string) {
+    setForm((f: any) => ({
+      ...f,
+      defect_types: f.defect_types.includes(defect) ? f.defect_types.filter((d: string) => d !== defect) : [...f.defect_types, defect],
+    }));
+  }
 
   const stageColor: Record<string, any> = {
     RAW_MIXING: 'muted', MOLDING: 'info', DRYING: 'warning',
@@ -171,8 +185,19 @@ export default function ProductionPage() {
             </select>
           </div>
           <div>
-            <label className="label">Kiln Number</label>
-            <input className="input" value={form.kiln_number} onChange={e => setForm({ ...form, kiln_number: e.target.value })} required />
+            <label className="label">Kiln</label>
+            <select className="input" value={form.kilnId} onChange={e => {
+              const kiln = (kilns as any[]).find((k: any) => k.id === e.target.value);
+              setForm({ ...form, kilnId: e.target.value, kiln_number: kiln?.name || '' });
+            }}>
+              <option value="">-- Select Kiln --</option>
+              {(kilns as any[]).filter((k: any) => k.status !== 'INACTIVE').map((k: any) => (
+                <option key={k.id} value={k.id}>{k.name} ({k.status})</option>
+              ))}
+            </select>
+            {!form.kilnId && (
+              <input className="input mt-1" placeholder="Or enter kiln number manually" value={form.kiln_number} onChange={e => setForm({ ...form, kiln_number: e.target.value })} />
+            )}
           </div>
           <div>
             <label className="label">Current Stage</label>
@@ -197,6 +222,24 @@ export default function ProductionPage() {
           <div>
             <label className="label">Rejected <span className="text-xs text-muted-foreground">(auto)</span></label>
             <input type="number" className="input bg-background" value={form.bricks_rejected} onChange={e => setForm({ ...form, bricks_rejected: Number(e.target.value) })} />
+          </div>
+          <div>
+            <label className="label">Reject Disposition</label>
+            <select className="input" value={form.reject_disposition} onChange={e => setForm({ ...form, reject_disposition: e.target.value })}>
+              <option value="">-- None --</option>
+              {DISPOSITIONS.map(d => <option key={d}>{d.replace(/_/g, ' ')}</option>)}
+            </select>
+          </div>
+          <div className="col-span-2">
+            <label className="label">Defect Types <span className="text-xs text-muted-foreground">(select all that apply)</span></label>
+            <div className="flex flex-wrap gap-2 mt-1">
+              {DEFECT_TYPES.map(d => (
+                <label key={d} className={`flex items-center gap-1.5 text-xs cursor-pointer px-2 py-1 rounded border transition-colors ${form.defect_types?.includes(d) ? 'bg-primary/10 border-primary text-primary' : 'border-border text-muted-foreground hover:border-accent'}`}>
+                  <input type="checkbox" className="sr-only" checked={form.defect_types?.includes(d)} onChange={() => toggleDefect(d)} />
+                  {d.replace(/_/g, ' ')}
+                </label>
+              ))}
+            </div>
           </div>
           <div className="col-span-2">
             <label className="label">Rejection Reason</label>

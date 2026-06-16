@@ -62,6 +62,27 @@ export default function ReportsPage() {
         ))}
       </div>
 
+      {/* CSV Exports */}
+      {(tab === 'sales' || tab === 'financials') && (
+        <div className="flex gap-2 flex-wrap no-print">
+          {tab === 'sales' && (
+            <a href={reportApi.exportInvoicesUrl({ from, to })} target="_blank" rel="noreferrer" className="btn-outline flex items-center gap-1.5 text-sm">
+              <Download size={14} /> Invoices CSV
+            </a>
+          )}
+          {tab === 'financials' && (
+            <>
+              <a href={reportApi.exportExpensesUrl({ from, to })} target="_blank" rel="noreferrer" className="btn-outline flex items-center gap-1.5 text-sm">
+                <Download size={14} /> Expenses CSV
+              </a>
+              <a href={reportApi.exportPaymentsUrl({ from, to })} target="_blank" rel="noreferrer" className="btn-outline flex items-center gap-1.5 text-sm">
+                <Download size={14} /> Payments CSV
+              </a>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Filters */}
       {tab !== 'payroll' && (
         <div className="card flex gap-4 items-center no-print">

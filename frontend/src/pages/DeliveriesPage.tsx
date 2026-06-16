@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Printer, AlertTriangle } from 'lucide-react';
 import { deliveryApi, orderApi } from '../services/api';
 import Modal from '../components/ui/Modal';
 import Badge, { statusBadge } from '../components/ui/Badge';
@@ -17,9 +17,11 @@ export default function DeliveriesPage() {
   const { toast } = useToast();
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
-  const [modal, setModal] = useState<'create' | 'status' | null>(null);
+  const [modal, setModal] = useState<'create' | 'status' | 'damage' | null>(null);
   const [selected, setSelected] = useState<any>(null);
   const [form, setForm] = useState<any>({ orderId: '', vehicle_plate: '', driver_name: '', scheduled_date: '', quantity_loaded: 0, delivery_fee: 0 });
+  const [statusForm, setStatusForm] = useState<any>({ status: 'SCHEDULED', actual_delivery_date: new Date().toISOString().slice(0,10), notes: '', receiver_name: '' });
+  const [damageForm, setDamageForm] = useState<any>({ damage_qty: 0, damage_notes: '' });
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data: deliveries = [], isLoading } = useQuery({
@@ -45,8 +47,14 @@ export default function DeliveriesPage() {
   });
 
   const updateStatus = useMutation({
-    mutationFn: ({ id, status, notes, actual_delivery_date }: any) => deliveryApi.updateStatus(id, { status, notes, actual_delivery_date }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['deliveries'] }); toast('Status updated', 'success'); setModal(null); },
+    mutationFn: ({ id, ...data }: any) => deliveryApi.updateStatus(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['deliveries'] }); qc.invalidateQueries({ queryKey: ['inventory'] }); toast('Status updated', 'success'); setModal(null); },
+    onError: err => toast(getErrorMessage(err), 'error'),
+  });
+
+  const recordDamage = useMutation({
+    mutationFn: ({ id, ...data }: any) => deliveryApi.recordDamage(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['deliveries'] }); toast('Damage recorded', 'success'); setModal(null); },
     onError: err => toast(getErrorMessage(err), 'error'),
   });
 
@@ -83,8 +91,20 @@ export default function DeliveriesPage() {
                       <td className="px-3 py-3">{fmtRWF(cost)}</td>
                       <td className="px-3 py-3"><Badge variant={statusBadge(d.status)}>{d.status}</Badge></td>
                       <td className="px-3 py-3">
-                        <div className="flex gap-2 items-center">
-                          <button onClick={() => { setSelected(d); setModal('status'); }} className="text-xs text-primary hover:underline">Update</button>
+                        <div className="flex gap-1 items-center flex-wrap">
+                          <button onClick={() => { setSelected(d); setStatusForm({ status: d.status, actual_delivery_date: new Date().toISOString().slice(0,10), notes: '', receiver_name: d.receiver_name || '' }); setModal('status'); }} className="text-xs text-primary hover:underline">Update</button>
+                          <span className="text-muted-foreground">·</span>
+                          <a href={deliveryApi.waybillUrl(d.id)} target="_blank" rel="noreferrer" title="Print Waybill" className="text-xs text-accent hover:underline flex items-center gap-0.5">
+                            <Printer size={11} /> Waybill
+                          </a>
+                          {d.status === 'DELIVERED' && (
+                            <>
+                              <span className="text-muted-foreground">·</span>
+                              <button onClick={() => { setSelected(d); setDamageForm({ damage_qty: d.damage_qty || 0, damage_notes: d.damage_notes || '' }); setModal('damage'); }} className="text-xs text-orange-600 hover:underline flex items-center gap-0.5">
+                                <AlertTriangle size={11} /> Damage
+                              </button>
+                            </>
+                          )}
                           {isAdmin && (
                             <>
                               <span className="text-muted-foreground">·</span>
@@ -145,26 +165,47 @@ export default function DeliveriesPage() {
         <div className="space-y-4">
           <div>
             <label className="label">Status</label>
-            <select className="input" defaultValue={selected?.status} id="del-status">
+            <select className="input" value={statusForm.status} onChange={e => setStatusForm((f: any) => ({ ...f, status: e.target.value }))}>
               {STATUSES.map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
+          {statusForm.status === 'DELIVERED' && (
+            <div>
+              <label className="label">Receiver Name <span className="text-xs text-muted-foreground">(Proof of delivery)</span></label>
+              <input className="input" placeholder="Name of person who received" value={statusForm.receiver_name} onChange={e => setStatusForm((f: any) => ({ ...f, receiver_name: e.target.value }))} />
+            </div>
+          )}
           <div>
             <label className="label">Actual Delivery Date</label>
-            <input type="date" className="input" id="del-date" defaultValue={new Date().toISOString().slice(0,10)} />
+            <input type="date" className="input" value={statusForm.actual_delivery_date} onChange={e => setStatusForm((f: any) => ({ ...f, actual_delivery_date: e.target.value }))} />
           </div>
           <div>
             <label className="label">Notes</label>
-            <input className="input" id="del-notes" />
+            <input className="input" value={statusForm.notes} onChange={e => setStatusForm((f: any) => ({ ...f, notes: e.target.value }))} />
           </div>
           <div className="flex gap-3 justify-end pt-2 border-t border-border">
             <button className="btn-outline" onClick={() => setModal(null)}>Cancel</button>
-            <button className="btn-primary" onClick={() => {
-              const status = (document.getElementById('del-status') as HTMLSelectElement).value;
-              const actual_delivery_date = (document.getElementById('del-date') as HTMLInputElement).value;
-              const notes = (document.getElementById('del-notes') as HTMLInputElement).value;
-              updateStatus.mutate({ id: selected.id, status, actual_delivery_date, notes });
-            }} disabled={updateStatus.isPending}>Update</button>
+            <button className="btn-primary" onClick={() => updateStatus.mutate({ id: selected.id, ...statusForm })} disabled={updateStatus.isPending}>Update</button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={modal === 'damage'} onClose={() => setModal(null)} title="Record Transport Damage">
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">Delivery for: <strong>{selected?.order?.customer?.company_name || selected?.order?.customer?.full_name}</strong> — {selected?.quantity_loaded?.toLocaleString()} bricks loaded</p>
+          <div>
+            <label className="label">Damaged Quantity</label>
+            <input type="number" min={0} className="input" value={damageForm.damage_qty} onChange={e => setDamageForm((f: any) => ({ ...f, damage_qty: Number(e.target.value) }))} />
+          </div>
+          <div>
+            <label className="label">Damage Notes</label>
+            <textarea className="input" rows={3} value={damageForm.damage_notes} onChange={e => setDamageForm((f: any) => ({ ...f, damage_notes: e.target.value }))} placeholder="Describe the damage (cracks, breakage, etc.)" />
+          </div>
+          <div className="flex gap-3 justify-end pt-2 border-t border-border">
+            <button className="btn-outline" onClick={() => setModal(null)}>Cancel</button>
+            <button className="btn-primary" onClick={() => recordDamage.mutate({ id: selected.id, ...damageForm })} disabled={recordDamage.isPending}>
+              {recordDamage.isPending ? 'Saving...' : 'Record Damage'}
+            </button>
           </div>
         </div>
       </Modal>

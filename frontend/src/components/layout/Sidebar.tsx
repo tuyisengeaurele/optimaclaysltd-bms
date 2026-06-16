@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard, Users, DollarSign, Calendar, Factory, Package,
+  LayoutDashboard, Users, DollarSign, Factory, Package,
   ShoppingCart, FileText, FileCheck, Truck, TrendingUp, BarChart2,
-  PanelLeftClose, PanelLeftOpen, UserCheck, ClipboardList, ShieldCheck, Settings
+  PanelLeftClose, PanelLeftOpen, UserCheck, ClipboardList, ShieldCheck, Settings,
+  Flame, Building, Tag, ClipboardCheck, Upload, History
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -13,14 +14,20 @@ const ALL_NAV = [
   { to: '/attendance', icon: UserCheck, label: 'Attendance', roles: ['ADMIN', 'PRODUCTION_SUPERVISOR'] },
   { to: '/payroll', icon: DollarSign, label: 'Payroll', roles: ['ADMIN', 'ACCOUNTANT'] },
   { to: '/production', icon: Factory, label: 'Production', roles: ['ADMIN', 'PRODUCTION_SUPERVISOR'] },
+  { to: '/kilns', icon: Flame, label: 'Kilns', roles: ['ADMIN', 'PRODUCTION_SUPERVISOR'] },
   { to: '/inventory', icon: Package, label: 'Inventory', roles: ['ADMIN', 'STORE_MANAGER', 'PRODUCTION_SUPERVISOR'] },
+  { to: '/suppliers', icon: Building, label: 'Suppliers', roles: ['ADMIN', 'STORE_MANAGER'] },
+  { to: '/reconciliation', icon: ClipboardCheck, label: 'Reconciliation', roles: ['ADMIN', 'STORE_MANAGER'] },
   { to: '/customers', icon: ClipboardList, label: 'Customers', roles: ['ADMIN', 'SALES_OFFICER', 'ACCOUNTANT'] },
   { to: '/orders', icon: ShoppingCart, label: 'Orders', roles: ['ADMIN', 'SALES_OFFICER', 'ACCOUNTANT'] },
+  { to: '/price-catalogue', icon: Tag, label: 'Price Catalogue', roles: ['ADMIN', 'SALES_OFFICER'] },
   { to: '/invoices', icon: FileText, label: 'Invoices', roles: ['ADMIN', 'SALES_OFFICER', 'ACCOUNTANT'] },
   { to: '/proformas', icon: FileCheck, label: 'Proformas', roles: ['ADMIN', 'SALES_OFFICER', 'ACCOUNTANT'] },
   { to: '/deliveries', icon: Truck, label: 'Deliveries', roles: ['ADMIN', 'SALES_OFFICER', 'STORE_MANAGER'] },
   { to: '/financials', icon: TrendingUp, label: 'Financials', roles: ['ADMIN', 'ACCOUNTANT'] },
   { to: '/reports', icon: BarChart2, label: 'Reports', roles: ['ADMIN', 'ACCOUNTANT'] },
+  { to: '/import', icon: Upload, label: 'Bulk Import', roles: ['ADMIN'] },
+  { to: '/audit', icon: History, label: 'Audit Log', roles: ['ADMIN'] },
   { to: '/users', icon: ShieldCheck, label: 'Users', roles: ['ADMIN'] },
   { to: '/settings', icon: Settings, label: 'Settings', roles: null },
 ];

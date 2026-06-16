@@ -1,14 +1,12 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, TrendingUp, TrendingDown, Trash2 } from 'lucide-react';
-import { reportApi, expenseApi } from '../services/api';
+import { reportApi, expenseApi, expenseCategoryApi } from '../services/api';
 import Modal from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { getErrorMessage, fmtDate, fmtRWF } from '../hooks/useToastHelper';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
-
-const CATEGORIES = ['MAINTENANCE','UTILITIES','TRANSPORT','OTHER'];
 
 export default function FinancialsPage() {
   const qc = useQueryClient();
@@ -18,7 +16,13 @@ export default function FinancialsPage() {
   const [from, setFrom] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().slice(0,10); });
   const [to, setTo] = useState(new Date().toISOString().slice(0,10));
   const [modal, setModal] = useState(false);
-  const [form, setForm] = useState({ category: 'MAINTENANCE', amount: 0, date: new Date().toISOString().slice(0,10), description: '' });
+  const [form, setForm] = useState({ category: '', amount: 0, date: new Date().toISOString().slice(0,10), description: '' });
+
+  const { data: categoryData = [] } = useQuery({
+    queryKey: ['expense-categories'],
+    queryFn: () => expenseCategoryApi.list().then(r => r.data.data),
+  });
+  const categories: string[] = (categoryData as any[]).map((c: any) => c.name);
   const [deleteExpId, setDeleteExpId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
@@ -39,7 +43,7 @@ export default function FinancialsPage() {
 
   const addExpense = useMutation({
     mutationFn: (d: any) => expenseApi.create(d),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['financials'] }); qc.invalidateQueries({ queryKey: ['expenses'] }); toast('Expense recorded', 'success'); setModal(false); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['financials'] }); qc.invalidateQueries({ queryKey: ['expenses'] }); toast('Expense recorded', 'success'); setModal(false); setForm({ category: '', amount: 0, date: new Date().toISOString().slice(0,10), description: '' }); },
     onError: err => toast(getErrorMessage(err), 'error'),
   });
 
@@ -133,8 +137,9 @@ export default function FinancialsPage() {
         <form onSubmit={e => { e.preventDefault(); addExpense.mutate(form); }} className="space-y-4">
           <div>
             <label className="label">Category</label>
-            <select className="input" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
-              {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+            <select className="input" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} required>
+              <option value="">-- Select --</option>
+              {categories.map(c => <option key={c}>{c}</option>)}
             </select>
           </div>
           <div><label className="label">Amount (RWF)</label><input type="number" className="input" value={form.amount} onChange={e => setForm({ ...form, amount: Number(e.target.value) })} required /></div>

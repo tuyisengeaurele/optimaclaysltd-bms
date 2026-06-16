@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { KeyRound, User, Pencil, Building2, Save } from 'lucide-react';
-import { authApi, settingsApi } from '../services/api';
+import { KeyRound, User, Pencil, Building2, Save, Tag, Plus, Trash2 } from 'lucide-react';
+import { authApi, settingsApi, expenseCategoryApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/Toast';
 import { getErrorMessage } from '../hooks/useToastHelper';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
-type Tab = 'profile' | 'company';
+type Tab = 'profile' | 'company' | 'categories';
 
 const EMPTY_COMPANY = {
   tin: '',
@@ -19,6 +19,7 @@ const EMPTY_COMPANY = {
   director_title: '',
   default_payment_terms: '',
   default_delivery_period: '',
+  overdue_grace_days: 0,
 };
 
 export default function SettingsPage() {
@@ -64,6 +65,7 @@ export default function SettingsPage() {
         director_title:          companyData.director_title          || '',
         default_payment_terms:   companyData.default_payment_terms   || '',
         default_delivery_period: companyData.default_delivery_period || '',
+        overdue_grace_days:      companyData.overdue_grace_days      ?? 0,
       });
     }
   }, [companyData]);
@@ -75,6 +77,24 @@ export default function SettingsPage() {
       toast('Company settings saved', 'success');
       setEditingCompany(false);
     },
+    onError: err => toast(getErrorMessage(err), 'error'),
+  });
+
+  // Expense categories
+  const [newCatName, setNewCatName] = useState('');
+  const { data: expCats = [] } = useQuery({
+    queryKey: ['expense-categories'],
+    queryFn: () => expenseCategoryApi.list().then(r => r.data.data),
+    enabled: isAdmin,
+  });
+  const addCat = useMutation({
+    mutationFn: (name: string) => expenseCategoryApi.create({ name }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['expense-categories'] }); setNewCatName(''); toast('Category added', 'success'); },
+    onError: err => toast(getErrorMessage(err), 'error'),
+  });
+  const delCat = useMutation({
+    mutationFn: (id: string) => expenseCategoryApi.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['expense-categories'] }); toast('Category removed', 'success'); },
     onError: err => toast(getErrorMessage(err), 'error'),
   });
 
@@ -145,6 +165,18 @@ export default function SettingsPage() {
             }`}
           >
             <span className="flex items-center gap-1.5"><Building2 size={14} /> Company Profile</span>
+          </button>
+        )}
+        {isAdmin && (
+          <button
+            onClick={() => setTab('categories')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              tab === 'categories'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <span className="flex items-center gap-1.5"><Tag size={14} /> Expense Categories</span>
           </button>
         )}
       </div>
@@ -233,6 +265,36 @@ export default function SettingsPage() {
             </form>
           </div>
 
+        </div>
+      )}
+
+      {/* ── EXPENSE CATEGORIES TAB ── */}
+      {tab === 'categories' && isAdmin && (
+        <div className="card max-w-lg">
+          <div className="flex items-center gap-3 mb-4">
+            <Tag size={18} className="text-accent" />
+            <div>
+              <h2 className="font-semibold text-accent">Expense Categories</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">Manage the categories available when recording manual expenses</p>
+            </div>
+          </div>
+          <div className="space-y-2 mb-4">
+            {(expCats as any[]).map((cat: any) => (
+              <div key={cat.id} className="flex items-center justify-between px-3 py-2 bg-background rounded-lg">
+                <span className="text-sm font-medium">{cat.name}</span>
+                <button onClick={() => delCat.mutate(cat.id)} className="p-1 text-danger hover:text-red-700 rounded" title="Delete category">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+            {(expCats as any[]).length === 0 && <p className="text-muted-foreground text-sm py-2">No categories yet.</p>}
+          </div>
+          <form onSubmit={e => { e.preventDefault(); if (newCatName.trim()) addCat.mutate(newCatName.trim()); }} className="flex gap-2">
+            <input className="input flex-1" placeholder="New category name..." value={newCatName} onChange={e => setNewCatName(e.target.value)} />
+            <button type="submit" className="btn-primary flex items-center gap-1" disabled={addCat.isPending || !newCatName.trim()}>
+              <Plus size={14} /> Add
+            </button>
+          </form>
         </div>
       )}
 
@@ -327,6 +389,15 @@ export default function SettingsPage() {
                     <textarea className="input resize-none" rows={2} value={companyForm.default_payment_terms} onChange={cf('default_payment_terms')}
                       placeholder="e.g. 50% advance, 25% upon completion of 75% of the order, and the remaining 25% before final delivery" />
                   </div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Invoice Alerts</h3>
+                <div>
+                  <label className="label">Overdue Grace Days <span className="text-xs text-muted-foreground">— invoices won't flag as overdue until this many days past due date</span></label>
+                  <input type="number" min={0} className="input w-32" value={companyForm.overdue_grace_days}
+                    onChange={e => setCompanyForm(f => ({ ...f, overdue_grace_days: Number(e.target.value) }))} />
                 </div>
               </div>
 
