@@ -58,7 +58,7 @@ export default function SuppliersPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-accent">Suppliers</h1>
-          <p className="text-sm text-gray-500 mt-1">Raw material suppliers and their contact details</p>
+          <p className="text-sm text-gray-500 mt-1">Raw material suppliers</p>
         </div>
         <button className="btn-primary flex items-center gap-2" onClick={openCreate}><Plus size={16} /> Add Supplier</button>
       </div>

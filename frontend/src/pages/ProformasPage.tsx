@@ -256,7 +256,7 @@ export default function ProformasPage() {
 
           {/* Validity */}
           <div>
-            <label className="label">Valid Until <span className="text-xs text-muted-foreground">(optional — defaults to 30 days)</span></label>
+            <label className="label">Valid Until <span className="text-xs text-muted-foreground">(optional, defaults to 30 days)</span></label>
             <input
               type="date" className="input"
               value={form.valid_until}

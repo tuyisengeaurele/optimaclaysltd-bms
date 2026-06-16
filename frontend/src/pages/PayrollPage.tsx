@@ -50,7 +50,7 @@ export default function PayrollPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-accent">Payroll</h1>
-          <p className="text-sm text-gray-500 mt-1">Create monthly payroll runs and export bank payment files</p>
+          <p className="text-sm text-gray-500 mt-1">Monthly payroll runs and bank payment exports</p>
         </div>
         <button className="btn-primary flex items-center gap-2" onClick={() => setModal(true)}>
           <Plus size={16} /> New Payroll Run

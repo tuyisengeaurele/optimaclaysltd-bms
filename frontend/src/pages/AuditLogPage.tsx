@@ -25,7 +25,7 @@ export default function AuditLogPage() {
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-accent">Audit Log</h1>
-        <p className="text-sm text-gray-500 mt-1">Complete record of all creates, updates, and deletes across the system</p>
+        <p className="text-sm text-gray-500 mt-1">Every create, update and delete in the system</p>
       </div>
 
       <div className="card mb-4 flex items-center gap-4">

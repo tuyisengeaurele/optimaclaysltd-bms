@@ -140,7 +140,7 @@ export default function SettingsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-accent">Settings</h1>
-        <p className="text-sm text-gray-500 mt-1">Manage your account and company preferences</p>
+        <p className="text-sm text-gray-500 mt-1">Company setup and account preferences</p>
       </div>
 
       {/* Tabs */}
@@ -395,7 +395,7 @@ export default function SettingsPage() {
               <div>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Invoice Alerts</h3>
                 <div>
-                  <label className="label">Overdue Grace Days <span className="text-xs text-muted-foreground">— invoices won't flag as overdue until this many days past due date</span></label>
+                  <label className="label">Overdue Grace Days <span className="text-xs text-muted-foreground">invoices don't flag as overdue until this many days past their due date</span></label>
                   <input type="number" min={0} className="input w-32" value={companyForm.overdue_grace_days}
                     onChange={e => setCompanyForm(f => ({ ...f, overdue_grace_days: Number(e.target.value) }))} />
                 </div>

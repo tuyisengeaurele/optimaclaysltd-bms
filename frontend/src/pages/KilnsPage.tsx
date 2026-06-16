@@ -73,7 +73,7 @@ export default function KilnsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-accent">Kilns</h1>
-          <p className="text-sm text-gray-500 mt-1">Manage kiln capacity, status, and maintenance schedule</p>
+          <p className="text-sm text-gray-500 mt-1">Track kiln status and service history</p>
         </div>
         <button className="btn-primary flex items-center gap-2" onClick={openCreate}>
           <Plus size={16} /> Add Kiln

@@ -135,7 +135,7 @@ export default function CustomersPage() {
             </>
           )}
           <div><label className="label">Location / Address</label><input className="input" value={form.location || ''} onChange={e => setForm({ ...form, location: e.target.value })} /></div>
-          <div><label className="label">Credit Limit (RWF) <span className="text-xs text-muted-foreground">— 0 means no limit</span></label><input type="number" min={0} className="input" value={form.credit_limit || 0} onChange={e => setForm({ ...form, credit_limit: Number(e.target.value) })} /></div>
+          <div><label className="label">Credit Limit (RWF) <span className="text-xs text-muted-foreground">(0 = no limit)</span></label><input type="number" min={0} className="input" value={form.credit_limit || 0} onChange={e => setForm({ ...form, credit_limit: Number(e.target.value) })} /></div>
           <div><label className="label">Notes</label><textarea className="input" rows={2} value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
           <div className="flex gap-3 justify-end pt-2 border-t border-border">
             <button type="button" className="btn-outline" onClick={() => setModal(null)}>Cancel</button>

@@ -83,7 +83,7 @@ export default function UsersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-accent">User Management</h1>
-          <p className="text-sm text-gray-500 mt-1">Manage system users and their roles</p>
+          <p className="text-sm text-gray-500 mt-1">System users and access levels</p>
         </div>
         <button onClick={openCreate} className="btn-primary flex items-center gap-2">
           <Plus size={16} /> Add User

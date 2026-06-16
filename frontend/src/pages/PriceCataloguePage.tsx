@@ -53,7 +53,7 @@ export default function PriceCataloguePage() {
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-accent">Price Catalogue</h1>
-        <p className="text-sm text-gray-500 mt-1">Default unit prices per brick type — auto-filled when creating orders and proformas</p>
+        <p className="text-sm text-gray-500 mt-1">Default prices per brick type. These fill in automatically on new orders.</p>
       </div>
 
       <div className="card max-w-xl">

@@ -192,7 +192,7 @@ export default function DeliveriesPage() {
 
       <Modal open={modal === 'damage'} onClose={() => setModal(null)} title="Record Transport Damage">
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">Delivery for: <strong>{selected?.order?.customer?.company_name || selected?.order?.customer?.full_name}</strong> — {selected?.quantity_loaded?.toLocaleString()} bricks loaded</p>
+          <p className="text-sm text-muted-foreground">Delivery for: <strong>{selected?.order?.customer?.company_name || selected?.order?.customer?.full_name}</strong>, {selected?.quantity_loaded?.toLocaleString()} bricks loaded</p>
           <div>
             <label className="label">Damaged Quantity</label>
             <input type="number" min={0} className="input" value={damageForm.damage_qty} onChange={e => setDamageForm((f: any) => ({ ...f, damage_qty: Number(e.target.value) }))} />

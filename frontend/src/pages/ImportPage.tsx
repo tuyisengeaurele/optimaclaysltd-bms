@@ -58,7 +58,7 @@ export default function ImportPage() {
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-accent">Bulk CSV Import</h1>
-        <p className="text-sm text-gray-500 mt-1">Import customers or employees from a CSV file</p>
+        <p className="text-sm text-gray-500 mt-1">Add customers or employees in bulk from a CSV file</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -96,7 +96,7 @@ export default function ImportPage() {
           >
             <Upload size={28} className="mx-auto mb-2 text-muted-foreground" />
             <p className="text-sm font-medium text-accent">Click to upload CSV</p>
-            <p className="text-xs text-muted-foreground mt-1">Duplicates (by phone / id_number) are automatically skipped</p>
+            <p className="text-xs text-muted-foreground mt-1">Existing records (matched by phone or ID) are skipped</p>
           </div>
           <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleFile} />
 
