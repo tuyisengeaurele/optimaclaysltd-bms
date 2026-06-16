@@ -70,7 +70,8 @@ app.use(cors({
       return cb(null, origin === process.env.FRONTEND_URL);
     }
     const isLocalhost = /^http:\/\/localhost(:\d+)?$/.test(origin);
-    cb(null, isLocalhost);
+    const isLAN = /^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/.test(origin);
+    cb(null, isLocalhost || isLAN);
   },
   credentials: true,
 }));
