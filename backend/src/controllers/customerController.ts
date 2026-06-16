@@ -14,7 +14,7 @@ export async function createCustomer(req: Request, res: Response) {
   const {
     customer_type, full_name, company_name, tin_number,
     phone, location, notes,
-    contact_person_name, contact_person_phone,
+    contact_person_name, contact_person_phone, credit_limit,
   } = req.body;
 
   if (!customer_type) return badRequest(res, 'customer_type is required');
@@ -33,6 +33,7 @@ export async function createCustomer(req: Request, res: Response) {
       notes: notes || null,
       contact_person_name: contact_person_name || null,
       contact_person_phone: contact_person_phone || null,
+      credit_limit: credit_limit != null ? Number(credit_limit) : 0,
     },
   });
   return created(res, customer);
@@ -54,7 +55,7 @@ export async function updateCustomer(req: Request, res: Response) {
   const {
     full_name, company_name, tin_number,
     phone, location, notes,
-    contact_person_name, contact_person_phone,
+    contact_person_name, contact_person_phone, credit_limit,
   } = req.body;
 
   const updated = await prisma.customer.update({
@@ -68,6 +69,7 @@ export async function updateCustomer(req: Request, res: Response) {
       notes: notes ?? customer.notes,
       contact_person_name: contact_person_name ?? customer.contact_person_name,
       contact_person_phone: contact_person_phone ?? customer.contact_person_phone,
+      credit_limit: credit_limit != null ? Number(credit_limit) : customer.credit_limit,
     },
   });
   return ok(res, updated);

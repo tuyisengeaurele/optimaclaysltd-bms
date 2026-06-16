@@ -2,8 +2,6 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { ok } from '../utils/response';
 
-
-
 function dateRange(req: any) {
   const from = req.query.from ? new Date(req.query.from) : new Date(new Date().getFullYear(), 0, 1);
   const to = req.query.to ? new Date(req.query.to) : new Date();
@@ -50,19 +48,13 @@ export async function payrollReport(req: Request, res: Response) {
 export async function financialReport(req: Request, res: Response) {
   const { from, to } = dateRange(req);
 
-  const payments = await prisma.payment.findMany({
-    where: { date: { gte: from, lte: to } },
-  });
+  const payments = await prisma.payment.findMany({ where: { date: { gte: from, lte: to } } });
   const income = payments.reduce((s, p) => s + p.amount, 0);
 
-  const expenses = await prisma.expense.findMany({
-    where: { date: { gte: from, lte: to } },
-  });
+  const expenses = await prisma.expense.findMany({ where: { date: { gte: from, lte: to } } });
   const manualExpenses = expenses.reduce((s, e) => s + e.amount, 0);
 
-  const rawMaterials = await prisma.rawMaterialStock.findMany({
-    where: { date: { gte: from, lte: to } },
-  });
+  const rawMaterials = await prisma.rawMaterialStock.findMany({ where: { date: { gte: from, lte: to } } });
   const rawMaterialCost = rawMaterials.reduce((s, r) => s + r.total_cost, 0);
 
   const payrollEntries = await prisma.payrollEntry.findMany({
@@ -70,26 +62,100 @@ export async function financialReport(req: Request, res: Response) {
   });
   const payrollCost = payrollEntries.reduce((s, e) => s + e.net_salary, 0);
 
-  const deliveryCosts = await prisma.deliveryCost.findMany({
-    include: { delivery: true },
-  });
+  const deliveryCosts = await prisma.deliveryCost.findMany({ include: { delivery: true } });
   const filteredDeliveryCost = deliveryCosts
     .filter(dc => dc.createdAt >= from && dc.createdAt <= to)
     .reduce((s, dc) => s + dc.fuel_cost + dc.driver_fee + dc.hired_truck_cost, 0);
 
   const totalExpenses = manualExpenses + rawMaterialCost + payrollCost + filteredDeliveryCost;
-  const profit = income - totalExpenses;
 
   return ok(res, {
     income,
-    expenses: {
-      total: totalExpenses,
-      manual: manualExpenses,
-      rawMaterials: rawMaterialCost,
-      payroll: payrollCost,
-      delivery: filteredDeliveryCost,
-    },
-    profit,
+    expenses: { total: totalExpenses, manual: manualExpenses, rawMaterials: rawMaterialCost, payroll: payrollCost, delivery: filteredDeliveryCost },
+    profit: income - totalExpenses,
     expenseBreakdown: expenses,
   });
+}
+
+export async function exportInvoicesCSV(req: Request, res: Response) {
+  const { from, to } = dateRange(req);
+  const invoices = await prisma.invoice.findMany({
+    where: { date: { gte: from, lte: to } },
+    include: { order: { include: { customer: true } }, payments: true },
+    orderBy: { date: 'asc' },
+  });
+
+  const rows = [
+    ['Invoice #', 'Date', 'Due Date', 'Customer', 'Total', 'Paid', 'Balance', 'Overdue'].join(','),
+    ...invoices.map(inv => {
+      const paid = inv.payments.reduce((s, p) => s + p.amount, 0);
+      const customer = inv.order?.customer;
+      const name = (customer?.company_name || customer?.full_name || '').replace(/,/g, ' ');
+      return [
+        inv.number,
+        inv.date.toISOString().slice(0, 10),
+        inv.due_date ? inv.due_date.toISOString().slice(0, 10) : '',
+        name,
+        inv.total.toFixed(2),
+        paid.toFixed(2),
+        (inv.total - paid).toFixed(2),
+        inv.is_overdue ? 'Yes' : 'No',
+      ].join(',');
+    }),
+  ];
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="invoices_${from.toISOString().slice(0, 10)}_${to.toISOString().slice(0, 10)}.csv"`);
+  return res.send(rows.join('\r\n'));
+}
+
+export async function exportExpensesCSV(req: Request, res: Response) {
+  const { from, to } = dateRange(req);
+  const expenses = await prisma.expense.findMany({
+    where: { date: { gte: from, lte: to } },
+    orderBy: { date: 'asc' },
+  });
+
+  const rows = [
+    ['Date', 'Category', 'Amount', 'Description'].join(','),
+    ...expenses.map(e => [
+      e.date.toISOString().slice(0, 10),
+      e.category,
+      e.amount.toFixed(2),
+      (e.description || '').replace(/,/g, ' '),
+    ].join(',')),
+  ];
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="expenses_${from.toISOString().slice(0, 10)}_${to.toISOString().slice(0, 10)}.csv"`);
+  return res.send(rows.join('\r\n'));
+}
+
+export async function exportPaymentsCSV(req: Request, res: Response) {
+  const { from, to } = dateRange(req);
+  const payments = await prisma.payment.findMany({
+    where: { date: { gte: from, lte: to } },
+    include: { invoice: { include: { order: { include: { customer: true } } } } },
+    orderBy: { date: 'asc' },
+  });
+
+  const rows = [
+    ['Date', 'Invoice #', 'Customer', 'Amount', 'Method', 'Reference'].join(','),
+    ...payments.map(p => {
+      const customer = p.invoice?.order?.customer;
+      const name = (customer?.company_name || customer?.full_name || '').replace(/,/g, ' ');
+      return [
+        p.date.toISOString().slice(0, 10),
+        p.invoice?.number || '',
+        name,
+        p.amount.toFixed(2),
+        p.method,
+        p.reference || '',
+      ].join(',');
+    }),
+  ];
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="payments_${from.toISOString().slice(0, 10)}_${to.toISOString().slice(0, 10)}.csv"`);
+  return res.send(rows.join('\r\n'));
 }

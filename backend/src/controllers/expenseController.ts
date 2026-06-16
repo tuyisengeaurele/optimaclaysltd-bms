@@ -2,8 +2,6 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { ok, created, notFound, badRequest } from '../utils/response';
 
-
-
 export async function listExpenses(req: Request, res: Response) {
   const { from, to } = req.query;
   const where: any = {};
@@ -15,13 +13,13 @@ export async function listExpenses(req: Request, res: Response) {
 
 export async function createExpense(req: Request, res: Response) {
   const { category, amount, date, description } = req.body;
-  if (!category) return badRequest(res, 'category is required');
+  if (!category?.trim()) return badRequest(res, 'category is required');
   if (amount == null || isNaN(Number(amount)) || Number(amount) <= 0) return badRequest(res, 'amount must be a positive number');
   if (!date) return badRequest(res, 'date is required');
 
   const expense = await prisma.expense.create({
     data: {
-      category,
+      category: category.trim(),
       amount: Number(amount),
       date: new Date(date),
       description: description || null,

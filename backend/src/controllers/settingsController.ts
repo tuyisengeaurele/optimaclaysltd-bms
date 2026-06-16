@@ -18,6 +18,7 @@ export async function getCompanySettings(req: Request, res: Response) {
         director_title: 'Managing Director',
         default_payment_terms: '50% advance, 25% upon completion of 75% of the order, and the remaining 25% before final delivery',
         default_delivery_period: '45 days from receipt of advance payment',
+        overdue_grace_days: 0,
       },
     });
   }
@@ -28,6 +29,7 @@ export async function updateCompanySettings(req: Request, res: Response) {
   const {
     tin, bank_name, bank_account, phone, email, address,
     director_name, director_title, default_payment_terms, default_delivery_period,
+    overdue_grace_days,
   } = req.body;
 
   if (!tin) return badRequest(res, 'TIN is required');
@@ -49,11 +51,30 @@ export async function updateCompanySettings(req: Request, res: Response) {
       director_title: director_title || '',
       default_payment_terms: default_payment_terms || '',
       default_delivery_period: default_delivery_period || '',
+      overdue_grace_days: overdue_grace_days != null ? Number(overdue_grace_days) : 0,
     },
     update: {
       tin, bank_name, bank_account, phone, email, address,
       director_name, director_title, default_payment_terms, default_delivery_period,
+      overdue_grace_days: overdue_grace_days != null ? Number(overdue_grace_days) : undefined,
     },
   });
   return ok(res, settings);
+}
+
+export async function getPinnedKpis(req: Request, res: Response) {
+  const user = (req as any).user;
+  const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
+  return ok(res, { pinned_kpis: dbUser?.pinned_kpis || [] });
+}
+
+export async function updatePinnedKpis(req: Request, res: Response) {
+  const user = (req as any).user;
+  const { pinned_kpis } = req.body;
+  if (!Array.isArray(pinned_kpis)) return badRequest(res, 'pinned_kpis must be an array');
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: { pinned_kpis },
+  });
+  return ok(res, { pinned_kpis: updated.pinned_kpis });
 }
