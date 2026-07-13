@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import { listPayrollRuns, createPayrollRun, getPayrollRun, updateEntry, finalizeRun, exportPayroll, getPayslip, deletePayrollRun } from '../controllers/payrollController';
 import { authenticate, authorize } from '../middleware/auth';
+import { auditLog } from '../middleware/audit';
 
 const router = Router();
 router.use(authenticate);
+router.use(auditLog('payroll'));
 
 router.get('/', listPayrollRuns);
 router.post('/', authorize('ADMIN', 'ACCOUNTANT'), createPayrollRun);

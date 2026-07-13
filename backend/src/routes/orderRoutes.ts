@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import { listOrders, createOrder, getOrder, updateOrder, updateOrderStatus, deleteOrder, getCustomerStatement } from '../controllers/orderController';
 import { authenticate, authorize } from '../middleware/auth';
+import { auditLog } from '../middleware/audit';
 
 const router = Router();
 router.use(authenticate);
+router.use(auditLog('order'));
 
 router.get('/', listOrders);
 router.post('/', createOrder);

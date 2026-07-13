@@ -33,8 +33,12 @@ export default function AuditLogPage() {
           <label className="label">Filter by resource</label>
           <select className="input w-48" value={resource} onChange={e => { setResource(e.target.value); setPage(1); }}>
             <option value="">All resources</option>
-            {['order', 'invoice', 'payment', 'customer', 'employee', 'delivery', 'expense', 'payroll', 'production', 'supplier'].map(r => (
-              <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>
+            {[
+              'order', 'invoice', 'payment', 'customer', 'employee', 'delivery', 'expense', 'expense_category',
+              'payroll', 'production', 'supplier', 'inventory', 'proforma', 'attendance', 'reconciliation',
+              'price_catalogue', 'settings', 'import', 'kiln', 'auth',
+            ].map(r => (
+              <option key={r} value={r}>{r.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</option>
             ))}
           </select>
         </div>

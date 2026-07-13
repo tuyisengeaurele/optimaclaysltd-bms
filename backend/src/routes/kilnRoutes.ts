@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { authenticate, authorize } from '../middleware/auth';
+import { auditLog } from '../middleware/audit';
 import { listKilns, createKiln, updateKiln, deleteKiln } from '../controllers/kilnController';
 
 const router = Router();
 
 router.use(authenticate);
+router.use(auditLog('kiln'));
 
 router.get('/', listKilns);
 router.post('/', authorize('ADMIN', 'PRODUCTION_SUPERVISOR'), createKiln);
