@@ -120,6 +120,10 @@ export async function completeBatch(req: Request, res: Response) {
       });
     }
 
+    // DOWNGRADE_TO_B becomes sellable Grade B stock. DISPOSE is physically thrown
+    // away, so it is never counted as stock. Everything else (REWORK, or no
+    // disposition set) still exists on the shelf, so it is tracked as Reject-grade
+    // stock rather than disappearing from inventory once the batch is completed.
     if (rejected > 0 && reject_disposition === 'DOWNGRADE_TO_B') {
       await tx.finishedGoodsStock.create({
         data: {
@@ -129,6 +133,17 @@ export async function completeBatch(req: Request, res: Response) {
           quantity: rejected,
           source: 'PRODUCTION',
           notes: `Downgraded rejects from batch ${result.id.slice(0, 8).toUpperCase()}`,
+        },
+      });
+    } else if (rejected > 0 && reject_disposition !== 'DISPOSE') {
+      await tx.finishedGoodsStock.create({
+        data: {
+          brick_type: result.brick_type,
+          custom_name: result.custom_name,
+          quality_grade: 'REJECT',
+          quantity: rejected,
+          source: 'PRODUCTION',
+          notes: `Rejects from batch ${result.id.slice(0, 8).toUpperCase()}`,
         },
       });
     }

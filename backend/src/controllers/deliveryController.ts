@@ -156,7 +156,7 @@ async function buildWaybillHtml(id: string): Promise<{ html: string; number: str
   <div>
     ${logoBase64 ? `<img src="data:image/png;base64,${logoBase64}" class="logo" />` : ''}
     <div class="company-name">${settings?.tin ? `OPTIMA CLAYS LTD &nbsp;|&nbsp; TIN: ${settings.tin}` : 'OPTIMA CLAYS LTD'}</div>
-    <div style="font-size:11px;color:#555;margin-top:4px">${settings?.address || 'Muhanga, Shyogwe, Ruli, Rwanda'}</div>
+    <div style="font-size:11px;color:#555;margin-top:4px">${settings?.address || 'Rwanda, Southern Province, Muhanga, Shyogwe, Ruli'}</div>
   </div>
   <div style="text-align:right">
     <div class="doc-title">DELIVERY NOTE</div>

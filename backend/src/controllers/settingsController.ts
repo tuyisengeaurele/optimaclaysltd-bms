@@ -13,7 +13,7 @@ export async function getCompanySettings(req: Request, res: Response) {
         bank_account: '000490774630268',
         phone: '0788640901',
         email: 'optimaclaysltd@gmail.com',
-        address: 'Muhanga, Shyogwe, Ruli, Rwanda',
+        address: 'Rwanda, Southern Province, Muhanga, Shyogwe, Ruli',
         director_name: 'Eurelie MUREKEYISONI',
         director_title: 'Managing Director',
         default_payment_terms: '50% advance, 25% upon completion of 75% of the order, and the remaining 25% before final delivery',
