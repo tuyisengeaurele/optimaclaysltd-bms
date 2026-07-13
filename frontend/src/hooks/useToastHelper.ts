@@ -6,24 +6,13 @@ export function getErrorMessage(err: any): string {
 // Fetches a print/PDF document through the authenticated API client (so an expired
 // access token gets refreshed like any other request) and renders it in a new tab.
 // A plain <a href> to the API would skip that refresh and 401 on an expired session.
-export async function openPrintWindow(
-  fetchHtml: () => Promise<string>,
-  toast?: (message: string, type: 'error') => void
-): Promise<void> {
-  const win = window.open('', '_blank', 'noopener,noreferrer');
-  if (!win) {
-    toast?.('Your browser blocked the print window. Allow pop-ups for this site and try again.', 'error');
-    return;
-  }
-  win.document.write('<p style="font-family:sans-serif;padding:2rem;color:#666">Loading...</p>');
-  try {
-    const html = await fetchHtml();
+export async function openPrintWindow(fetchHtml: () => Promise<string>): Promise<void> {
+  const win = window.open('', '_blank');
+  const html = await fetchHtml();
+  if (win) {
     win.document.open();
     win.document.write(html);
     win.document.close();
-  } catch {
-    win.close();
-    toast?.('Could not load the document. Please try again.', 'error');
   }
 }
 

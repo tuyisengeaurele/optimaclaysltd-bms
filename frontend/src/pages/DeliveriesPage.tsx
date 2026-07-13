@@ -94,7 +94,7 @@ export default function DeliveriesPage() {
                         <div className="flex gap-1 items-center flex-wrap">
                           <button onClick={() => { setSelected(d); setStatusForm({ status: d.status, actual_delivery_date: new Date().toISOString().slice(0,10), notes: '', receiver_name: d.receiver_name || '' }); setModal('status'); }} className="text-xs text-primary hover:underline">Update</button>
                           <span className="text-muted-foreground">·</span>
-                          <button type="button" onClick={() => openPrintWindow(() => deliveryApi.waybillHtml(d.id).then(r => r.data), toast)} title="Print Waybill" className="text-xs text-accent hover:underline flex items-center gap-0.5">
+                          <button type="button" onClick={() => openPrintWindow(() => deliveryApi.waybillHtml(d.id).then(r => r.data))} title="Print Waybill" className="text-xs text-accent hover:underline flex items-center gap-0.5">
                             <Printer size={11} /> Waybill
                           </button>
                           {d.status === 'DELIVERED' && (
