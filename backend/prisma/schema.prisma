@@ -213,13 +213,16 @@ model ProductionBatch {
   kiln_number        String
   kilnId             String?
   kiln               Kiln?              @relation(fields: [kilnId], references: [id])
+  brick_type         BrickType          @default(BRICK_10)
+  custom_name        String?
   bricks_target      Int
-  bricks_produced    Int
+  bricks_produced    Int                @default(0)
   bricks_rejected    Int                @default(0)
   rejection_reason   String?
   defect_types       DefectType[]
   reject_disposition RejectDisposition?
   current_stage      ProductionStage    @default(RAW_MIXING)
+  completed_at       DateTime?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   deletedAt          DateTime?

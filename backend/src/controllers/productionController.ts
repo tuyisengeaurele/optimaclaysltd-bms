@@ -21,34 +21,43 @@ export async function listBatches(req: Request, res: Response) {
   return ok(res, { batches, total, page: Number(page), limit: Number(limit) });
 }
 
+// A batch only records what it is targeting for output when it starts. What actually
+// came out of the kiln is only known once firing and quality check are done, so
+// bricks_produced/bricks_rejected/defects are captured later through completeBatch.
 export async function createBatch(req: Request, res: Response) {
-  const { date, shift, kiln_number, kilnId, bricks_target, bricks_produced, bricks_rejected, rejection_reason, defect_types, reject_disposition, current_stage } = req.body;
-  if (!date || bricks_produced == null) return badRequest(res, 'date and bricks_produced are required');
-  if (bricks_produced < 0 || (bricks_rejected ?? 0) < 0) return badRequest(res, 'Brick counts cannot be negative');
-  if ((bricks_rejected ?? 0) > bricks_produced) return badRequest(res, 'Rejected cannot exceed produced');
+  const { date, shift, kiln_number, kilnId, brick_type, custom_name, bricks_target, current_stage } = req.body;
+  if (!date) return badRequest(res, 'date is required');
+  if (!shift) return badRequest(res, 'shift is required');
+  if (!bricks_target || Number(bricks_target) <= 0) return badRequest(res, 'bricks_target must be a positive number');
+  if (current_stage === 'STOCKPILED') return badRequest(res, 'A new batch cannot start already stockpiled, complete it instead');
+
   const batch = await prisma.productionBatch.create({
     data: {
       date: new Date(date),
       shift,
       kiln_number: kiln_number || '',
       kilnId: kilnId || null,
-      bricks_target: bricks_target ?? 0,
-      bricks_produced,
-      bricks_rejected: bricks_rejected ?? 0,
-      rejection_reason: rejection_reason || null,
-      defect_types: Array.isArray(defect_types) ? defect_types : [],
-      reject_disposition: reject_disposition || null,
-      current_stage,
+      brick_type: brick_type || 'BRICK_10',
+      custom_name: custom_name || null,
+      bricks_target: Number(bricks_target),
+      current_stage: current_stage || 'RAW_MIXING',
     },
     include: { kiln: true },
   });
   return created(res, batch);
 }
 
+// Updates the batch while it is still in progress: date, shift, kiln, target and stage
+// (short of completion). Produced/rejected counts are not editable here, only through
+// completeBatch, so a batch's recorded output always comes from one place.
 export async function updateBatch(req: Request, res: Response) {
   const batch = await prisma.productionBatch.findFirst({ where: { id: req.params.id, deletedAt: null } });
   if (!batch) return notFound(res, 'Production batch not found');
-  const { date, shift, kiln_number, kilnId, bricks_target, bricks_produced, bricks_rejected, rejection_reason, defect_types, reject_disposition, current_stage } = req.body;
+  if (batch.completed_at) return badRequest(res, 'Completed batches cannot be edited');
+
+  const { date, shift, kiln_number, kilnId, brick_type, custom_name, bricks_target, current_stage } = req.body;
+  if (current_stage === 'STOCKPILED') return badRequest(res, 'Use the complete action to move a batch to stockpiled');
+
   const updated = await prisma.productionBatch.update({
     where: { id: req.params.id },
     data: {
@@ -56,16 +65,77 @@ export async function updateBatch(req: Request, res: Response) {
       shift,
       kiln_number: kiln_number || undefined,
       kilnId: kilnId !== undefined ? (kilnId || null) : undefined,
+      brick_type,
+      custom_name: custom_name !== undefined ? (custom_name || null) : undefined,
       bricks_target,
-      bricks_produced,
-      bricks_rejected,
-      rejection_reason: rejection_reason !== undefined ? (rejection_reason || null) : undefined,
-      defect_types: Array.isArray(defect_types) ? defect_types : undefined,
-      reject_disposition: reject_disposition !== undefined ? (reject_disposition || null) : undefined,
       current_stage,
     },
     include: { kiln: true },
   });
+  return ok(res, updated);
+}
+
+// Marks a batch complete: records what actually came out of the kiln and moves the
+// good output (and any downgraded rejects) into finished goods stock in one transaction,
+// so completed production always shows up as sellable inventory automatically.
+export async function completeBatch(req: Request, res: Response) {
+  const batch = await prisma.productionBatch.findFirst({ where: { id: req.params.id, deletedAt: null } });
+  if (!batch) return notFound(res, 'Production batch not found');
+  if (batch.completed_at) return badRequest(res, 'Batch is already completed');
+
+  const { bricks_produced, bricks_rejected, rejection_reason, defect_types, reject_disposition } = req.body;
+  const produced = Number(bricks_produced);
+  const rejected = Number(bricks_rejected ?? 0);
+  if (bricks_produced == null || isNaN(produced) || produced < 0) return badRequest(res, 'bricks_produced must be a non-negative number');
+  if (isNaN(rejected) || rejected < 0) return badRequest(res, 'bricks_rejected must be a non-negative number');
+  if (rejected > produced) return badRequest(res, 'Rejected cannot exceed produced');
+
+  const goodQty = produced - rejected;
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const result = await tx.productionBatch.update({
+      where: { id: req.params.id },
+      data: {
+        bricks_produced: produced,
+        bricks_rejected: rejected,
+        rejection_reason: rejection_reason || null,
+        defect_types: Array.isArray(defect_types) ? defect_types : [],
+        reject_disposition: rejected > 0 ? (reject_disposition || null) : null,
+        current_stage: 'STOCKPILED',
+        completed_at: new Date(),
+      },
+      include: { kiln: true },
+    });
+
+    if (goodQty > 0) {
+      await tx.finishedGoodsStock.create({
+        data: {
+          brick_type: result.brick_type,
+          custom_name: result.custom_name,
+          quality_grade: 'GRADE_A',
+          quantity: goodQty,
+          source: 'PRODUCTION',
+          notes: `From batch ${result.id.slice(0, 8).toUpperCase()}`,
+        },
+      });
+    }
+
+    if (rejected > 0 && reject_disposition === 'DOWNGRADE_TO_B') {
+      await tx.finishedGoodsStock.create({
+        data: {
+          brick_type: result.brick_type,
+          custom_name: result.custom_name,
+          quality_grade: 'GRADE_B',
+          quantity: rejected,
+          source: 'PRODUCTION',
+          notes: `Downgraded rejects from batch ${result.id.slice(0, 8).toUpperCase()}`,
+        },
+      });
+    }
+
+    return result;
+  });
+
   return ok(res, updated);
 }
 

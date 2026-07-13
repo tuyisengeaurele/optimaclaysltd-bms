@@ -72,6 +72,7 @@ export const productionApi = {
   stats: () => api.get('/production/stats'),
   create: (data: any) => api.post('/production', data),
   update: (id: string, data: any) => api.put(`/production/${id}`, data),
+  complete: (id: string, data: any) => api.put(`/production/${id}/complete`, data),
   delete: (id: string) => api.delete(`/production/${id}`),
 };
 

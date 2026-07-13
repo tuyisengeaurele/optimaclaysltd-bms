@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { listBatches, createBatch, updateBatch, deleteBatch, getStats } from '../controllers/productionController';
+import { listBatches, createBatch, updateBatch, completeBatch, deleteBatch, getStats } from '../controllers/productionController';
 import { authenticate, authorize } from '../middleware/auth';
 
 const router = Router();
@@ -9,6 +9,7 @@ router.get('/', listBatches);
 router.get('/stats', getStats);
 router.post('/', createBatch);
 router.put('/:id', updateBatch);
+router.put('/:id/complete', completeBatch);
 router.delete('/:id', authorize('ADMIN', 'PRODUCTION_SUPERVISOR'), deleteBatch);
 
 export default router;
