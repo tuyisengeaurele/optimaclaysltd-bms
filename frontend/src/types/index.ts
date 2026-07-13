@@ -66,11 +66,14 @@ export interface ProductionBatch {
   date: string;
   shift: Shift;
   kiln_number: string;
+  brick_type: BrickType;
+  custom_name?: string | null;
   bricks_target: number;
   bricks_produced: number;
   bricks_rejected: number;
   rejection_reason?: string;
   current_stage: ProductionStage;
+  completed_at?: string | null;
 }
 
 export type MaterialType = 'CLAY' | 'SAND' | 'FUEL_FIREWOOD' | 'FUEL_COAL' | 'DIESEL' | 'CEMENT' | 'OTHER';
