@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Printer, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, Download, AlertTriangle } from 'lucide-react';
 import { deliveryApi, orderApi } from '../services/api';
 import Modal from '../components/ui/Modal';
 import Badge, { statusBadge } from '../components/ui/Badge';
 import { useToast } from '../components/ui/Toast';
 import { TableSkeleton } from '../components/ui/Skeleton';
-import { getErrorMessage, fmtDate, fmtRWF, openPrintWindow } from '../hooks/useToastHelper';
+import { getErrorMessage, fmtDate, fmtRWF, downloadPdf } from '../hooks/useToastHelper';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 
@@ -94,8 +94,8 @@ export default function DeliveriesPage() {
                         <div className="flex gap-1 items-center flex-wrap">
                           <button onClick={() => { setSelected(d); setStatusForm({ status: d.status, actual_delivery_date: new Date().toISOString().slice(0,10), notes: '', receiver_name: d.receiver_name || '' }); setModal('status'); }} className="text-xs text-primary hover:underline">Update</button>
                           <span className="text-muted-foreground">·</span>
-                          <button type="button" onClick={() => openPrintWindow(() => deliveryApi.waybillHtml(d.id).then(r => r.data))} title="Print Waybill" className="text-xs text-accent hover:underline flex items-center gap-0.5">
-                            <Printer size={11} /> Waybill
+                          <button type="button" onClick={() => downloadPdf(() => deliveryApi.downloadWaybillPdf(d.id).then(r => r.data), `Waybill-DN-${d.id.slice(0, 8).toUpperCase()}.pdf`)} title="Download Waybill PDF" className="text-xs text-accent hover:underline flex items-center gap-0.5">
+                            <Download size={11} /> Waybill
                           </button>
                           {d.status === 'DELIVERED' && (
                             <>

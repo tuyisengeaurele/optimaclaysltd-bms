@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { ok, created, notFound, badRequest } from '../utils/response';
+import { renderPdf } from '../lib/pdf';
 import fs from 'fs';
 import path from 'path';
 
@@ -117,13 +118,13 @@ export async function getProforma(req: Request, res: Response) {
   return ok(res, proforma);
 }
 
-// ── PRINT (HTML) ─────────────────────────────────────────────────────────────
-export async function printProforma(req: Request, res: Response) {
+// ── PDF DOCUMENT ─────────────────────────────────────────────────────────────
+async function buildProformaHtml(id: string): Promise<{ html: string; number: string } | null> {
   const proforma = await prisma.proformaInvoice.findUnique({
-    where: { id: req.params.id },
+    where: { id },
     include: { customer: true, order: true },
   });
-  if (!proforma) return notFound(res, 'Proforma invoice not found');
+  if (!proforma) return null;
 
   const settings = await prisma.companySettings.findUnique({ where: { id: 'singleton' } });
   const co = {
@@ -264,15 +265,9 @@ export async function printProforma(req: Request, res: Response) {
   /* ── DISCLAIMER ── */
   .disclaimer { background: #f8f8f8; border-top: 1px solid #eee; padding: 9px 36px; font-size: 10px; color: #999; text-align: center; line-height: 1.5; }
 
-  /* ── PRINT BUTTON ── */
-  .print-bar { padding: 20px; text-align: center; background: #eef0f4; }
-  .print-btn { background: #b71c1c; color: #fff; border: none; padding: 11px 30px; font-size: 14px; font-weight: 600; cursor: pointer; border-radius: 6px; letter-spacing: 0.3px; }
-  .print-btn:hover { background: #8b0000; }
-
   @media print {
     body { background: #fff; }
     .page { box-shadow: none; margin: 0; border-radius: 0; }
-    .print-bar { display: none !important; }
     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 </style>
@@ -424,15 +419,18 @@ export async function printProforma(req: Request, res: Response) {
   </div>
 
 </div>
-
-<div class="print-bar">
-  <button class="print-btn" onclick="window.print()">&#128438; Print / Save as PDF</button>
-</div>
-
-<script>window.addEventListener('load', function () { window.print(); });</script>
 </body>
 </html>`;
 
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(html);
+  return { html, number: proforma.number };
+}
+
+export async function downloadProformaPdf(req: Request, res: Response) {
+  const doc = await buildProformaHtml(req.params.id);
+  if (!doc) return notFound(res, 'Proforma invoice not found');
+
+  const pdf = await renderPdf(doc.html);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="Proforma-${doc.number}.pdf"`);
+  res.send(pdf);
 }

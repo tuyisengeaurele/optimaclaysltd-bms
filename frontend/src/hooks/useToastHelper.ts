@@ -3,17 +3,20 @@ export function getErrorMessage(err: any): string {
   return err?.response?.data?.message || err?.message || 'An error occurred';
 }
 
-// Fetches a print/PDF document through the authenticated API client (so an expired
-// access token gets refreshed like any other request) and renders it in a new tab.
-// A plain <a href> to the API would skip that refresh and 401 on an expired session.
-export async function openPrintWindow(fetchHtml: () => Promise<string>): Promise<void> {
-  const win = window.open('', '_blank');
-  const html = await fetchHtml();
-  if (win) {
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
-  }
+// Downloads a PDF through the authenticated API client (so an expired access token
+// refreshes like any other request) and saves it straight to disk, no browser print
+// dialog involved. A plain <a href> to the API would skip that refresh and 401 on an
+// expired session.
+export async function downloadPdf(fetchPdf: () => Promise<Blob>, filename: string): Promise<void> {
+  const blob = await fetchPdf();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 export function fmtRWF(amount: number): string {
