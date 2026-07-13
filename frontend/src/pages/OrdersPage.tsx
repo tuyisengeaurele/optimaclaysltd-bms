@@ -81,7 +81,7 @@ export default function OrdersPage() {
     mutationFn: (orderId: string) => proformaApi.create({ orderId }),
     onSuccess: (res) => {
       const proformaId = res.data.data.id;
-      openPrintWindow(() => proformaApi.printHtml(proformaId).then(r => r.data), toast);
+      openPrintWindow(() => proformaApi.printHtml(proformaId).then(r => r.data));
       toast('Proforma invoice generated', 'success');
     },
     onError: err => toast(getErrorMessage(err), 'error'),

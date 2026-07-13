@@ -135,7 +135,7 @@ export default function ProformasPage() {
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => openPrintWindow(() => proformaApi.printHtml(p.id).then(r => r.data), toast)}
+                            onClick={() => openPrintWindow(() => proformaApi.printHtml(p.id).then(r => r.data))}
                             className="flex items-center gap-1 text-xs text-primary hover:underline"
                           >
                             <Printer size={13} /> Print
