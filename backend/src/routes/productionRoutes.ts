@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import { listBatches, createBatch, updateBatch, completeBatch, deleteBatch, getStats } from '../controllers/productionController';
 import { authenticate, authorize } from '../middleware/auth';
+import { auditLog } from '../middleware/audit';
 
 const router = Router();
 router.use(authenticate);
+router.use(auditLog('production'));
 
 router.get('/', listBatches);
 router.get('/stats', getStats);

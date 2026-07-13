@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import { listEmployees, createEmployee, getEmployee, updateEmployee, deleteEmployee } from '../controllers/employeeController';
 import { authenticate, authorize } from '../middleware/auth';
+import { auditLog } from '../middleware/audit';
 
 const router = Router();
 router.use(authenticate);
+router.use(auditLog('employee'));
 
 router.get('/', listEmployees);
 router.get('/:id', getEmployee);

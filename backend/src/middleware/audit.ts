@@ -16,7 +16,8 @@ export function auditLog(resource: string) {
         prisma.auditLog.create({
           data: {
             user_id: user?.id || null,
-            user_name: user?.full_name || null,
+            // the JWT payload only carries id/email/role, not full_name, so fall back to email
+            user_name: user?.full_name || user?.email || null,
             action,
             resource,
             resource_id: resourceId,

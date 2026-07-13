@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import { listDeliveries, createDelivery, updateDeliveryStatus, recordDamage, printWaybill, deleteDelivery } from '../controllers/deliveryController';
 import { authenticate, authorize } from '../middleware/auth';
+import { auditLog } from '../middleware/audit';
 
 const router = Router();
 router.use(authenticate);
+router.use(auditLog('delivery'));
 
 router.get('/', listDeliveries);
 router.post('/', createDelivery);
