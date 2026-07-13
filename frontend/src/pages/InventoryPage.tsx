@@ -24,10 +24,11 @@ export default function InventoryPage() {
     queryKey: ['inventory-raw'],
     queryFn: () => inventoryApi.listRaw().then(r => r.data.data),
   });
-  const { data: finishedGoods = [], isLoading: finLoading } = useQuery({
+  const { data: finishedData, isLoading: finLoading } = useQuery<any>({
     queryKey: ['inventory-finished'],
     queryFn: () => inventoryApi.listFinished().then(r => r.data.data),
   });
+  const finishedGoods = finishedData?.stocks || [];
 
   const addRaw = useMutation({
     mutationFn: (data: any) => inventoryApi.addRaw(data),

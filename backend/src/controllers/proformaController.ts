@@ -134,7 +134,7 @@ async function buildProformaHtml(id: string): Promise<{ html: string; number: st
     bank_account:    settings?.bank_account    || '000490774630268',
     phone:           settings?.phone           || '0788640901',
     email:           settings?.email           || 'optimaclaysltd@gmail.com',
-    address:         settings?.address         || 'Muhanga, Shyogwe, Ruli, Rwanda',
+    address:         settings?.address         || 'Rwanda, Southern Province, Muhanga, Shyogwe, Ruli',
     director_name:   settings?.director_name   || 'Eurelie MUREKEYISONI',
     director_title:  settings?.director_title  || 'Managing Director',
   };
@@ -282,8 +282,8 @@ async function buildProformaHtml(id: string): Promise<{ html: string; number: st
       <div class="hd-company">
         <strong>${co.name}</strong>
         ${co.address}<br/>
-        Tel: ${co.phone}&nbsp;&nbsp;|&nbsp;&nbsp;${co.email}<br/>
-        TIN: ${co.tin}
+        TIN: ${co.tin}<br/>
+        Tel: ${co.phone}&nbsp;&nbsp;|&nbsp;&nbsp;${co.email}
       </div>
     </div>
     <div class="hd-right">
@@ -376,7 +376,6 @@ async function buildProformaHtml(id: string): Promise<{ html: string; number: st
     <div class="totals-box">
       <table>
         <tr><td class="tot-lbl">Subtotal</td><td class="tot-val">${fmt(total)} RWF</td></tr>
-        <tr><td class="tot-lbl">VAT (0%)</td><td class="tot-val">0 RWF</td></tr>
         <tr class="grand"><td>Total Due</td><td style="text-align:right;">${fmt(total)} RWF</td></tr>
       </table>
     </div>

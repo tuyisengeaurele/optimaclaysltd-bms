@@ -27,7 +27,8 @@ export async function createReconciliation(req: Request, res: Response) {
 
   const rec = await prisma.stockReconciliation.create({
     data: {
-      reconciled_by: user?.full_name || 'Unknown',
+      // the JWT payload only carries id/email/role, not full_name
+      reconciled_by: user?.full_name || user?.email || 'Unknown',
       notes: notes || null,
       items: {
         create: items.map((item: any) => ({
