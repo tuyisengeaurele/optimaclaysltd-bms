@@ -5,7 +5,7 @@ import { proformaApi, customerApi, settingsApi } from '../services/api';
 import Modal from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { TableSkeleton } from '../components/ui/Skeleton';
-import { getErrorMessage, fmtDate, fmtRWF } from '../hooks/useToastHelper';
+import { getErrorMessage, fmtDate, fmtRWF, openPrintWindow } from '../hooks/useToastHelper';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import { PRODUCTS, getBrickLabel } from '../constants/products';
@@ -133,14 +133,13 @@ export default function ProformasPage() {
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex items-center gap-2">
-                          <a
-                            href={proformaApi.printUrl(p.id)}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <button
+                            type="button"
+                            onClick={() => openPrintWindow(() => proformaApi.printHtml(p.id).then(r => r.data), toast)}
                             className="flex items-center gap-1 text-xs text-primary hover:underline"
                           >
                             <Printer size={13} /> Print
-                          </a>
+                          </button>
                           {isAdmin && (
                             <>
                               <span className="text-muted-foreground">·</span>

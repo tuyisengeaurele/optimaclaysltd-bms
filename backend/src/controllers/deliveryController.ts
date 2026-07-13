@@ -129,7 +129,7 @@ export async function printWaybill(req: Request, res: Response) {
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Delivery Note — ${delivery.id.slice(0, 8).toUpperCase()}</title>
+<title>Delivery Note DN-${delivery.id.slice(0, 8).toUpperCase()}</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: Arial, sans-serif; font-size: 12px; color: #222; padding: 24px; }

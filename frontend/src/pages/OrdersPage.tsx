@@ -7,7 +7,7 @@ import Modal from '../components/ui/Modal';
 import Badge, { statusBadge } from '../components/ui/Badge';
 import { useToast } from '../components/ui/Toast';
 import { TableSkeleton } from '../components/ui/Skeleton';
-import { getErrorMessage, fmtDate, fmtRWF } from '../hooks/useToastHelper';
+import { getErrorMessage, fmtDate, fmtRWF, openPrintWindow } from '../hooks/useToastHelper';
 import { PRODUCTS, getBrickLabel } from '../constants/products';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
@@ -71,8 +71,8 @@ export default function OrdersPage() {
   const generateProforma = useMutation({
     mutationFn: (orderId: string) => proformaApi.create({ orderId }),
     onSuccess: (res) => {
-      const url = proformaApi.printUrl(res.data.data.id);
-      window.open(url, '_blank');
+      const proformaId = res.data.data.id;
+      openPrintWindow(() => proformaApi.printHtml(proformaId).then(r => r.data), toast);
       toast('Proforma invoice generated', 'success');
     },
     onError: err => toast(getErrorMessage(err), 'error'),
