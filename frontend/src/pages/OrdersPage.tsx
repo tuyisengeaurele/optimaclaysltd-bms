@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, FileText, Trash2, Pencil } from 'lucide-react';
-import { orderApi, customerApi, proformaApi, priceCatalogueApi } from '../services/api';
+import { orderApi, customerApi, proformaApi, priceCatalogueApi, inventoryApi } from '../services/api';
 import { Order } from '../types';
 import Modal from '../components/ui/Modal';
 import Badge, { statusBadge } from '../components/ui/Badge';
@@ -33,6 +33,15 @@ export default function OrdersPage() {
     queryFn: () => priceCatalogueApi.list().then(r => r.data.data),
   });
   const priceMap = Object.fromEntries((catalogue as any[]).map((p: any) => [p.brick_type, p.unit_price]));
+
+  const { data: finishedGoods } = useQuery<any>({
+    queryKey: ['inventory-finished'],
+    queryFn: () => inventoryApi.listFinished().then(r => r.data.data),
+  });
+  const stockSummary: any[] = finishedGoods?.summary || [];
+  const availableStock = stockSummary.find(
+    (s: any) => s.brick_type === form.brick_type && s.quality_grade === form.quality_grade
+  )?.current_stock ?? 0;
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ['orders'],
@@ -209,7 +218,14 @@ export default function OrdersPage() {
                 </select>
               </div>
               <div>
-                <label className="label">Quantity</label>
+                <label className="label">
+                  Quantity
+                  {form.brick_type !== 'CUSTOM' && (
+                    <span className={`ml-1 text-xs ${form.quantity > availableStock ? 'text-danger' : 'text-muted-foreground'}`}>
+                      (available: {availableStock.toLocaleString()})
+                    </span>
+                  )}
+                </label>
                 <input type="number" className="input" value={form.quantity} onChange={e => setForm({ ...form, quantity: Number(e.target.value) })} required />
               </div>
               <div>
