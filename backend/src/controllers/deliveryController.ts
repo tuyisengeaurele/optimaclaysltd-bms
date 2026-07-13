@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { prisma } from '../lib/prisma';
 import { ok, created, notFound, badRequest } from '../utils/response';
+import { renderPdf } from '../lib/pdf';
 
 export async function listDeliveries(req: Request, res: Response) {
   const { status, from, to } = req.query;
@@ -106,12 +107,12 @@ export async function recordDamage(req: Request, res: Response) {
   return ok(res, updated);
 }
 
-export async function printWaybill(req: Request, res: Response) {
+async function buildWaybillHtml(id: string): Promise<{ html: string; number: string } | null> {
   const delivery = await prisma.delivery.findUnique({
-    where: { id: req.params.id },
+    where: { id },
     include: { order: { include: { customer: true } }, costs: true },
   });
-  if (!delivery) return notFound(res, 'Delivery not found');
+  if (!delivery) return null;
 
   const settings = await prisma.companySettings.findUnique({ where: { id: 'singleton' } });
   const logoPath = path.join(__dirname, '../../assets/logo.png');
@@ -192,7 +193,7 @@ export async function printWaybill(req: Request, res: Response) {
   <tbody>
     <tr>
       <td>1</td>
-      <td>${brickType}${order?.custom_name ? ` — ${order.custom_name}` : ''}</td>
+      <td>${brickType}${order?.custom_name ? ` (${order.custom_name})` : ''}</td>
       <td>${(order?.quality_grade || '').replace(/_/g, ' ')}</td>
       <td style="text-align:right">${delivery.quantity_loaded.toLocaleString()}</td>
       ${delivery.damage_qty > 0 ? `<td style="text-align:right;color:#c00">${delivery.damage_qty.toLocaleString()}</td><td style="text-align:right;font-weight:bold">${(delivery.quantity_loaded - delivery.damage_qty).toLocaleString()}</td>` : ''}
@@ -221,12 +222,20 @@ ${delivery.notes ? `<div class="section"><div class="label">Notes</div><div clas
   OPTIMA CLAYS LTD &nbsp;|&nbsp; ${settings?.phone || ''} &nbsp;|&nbsp; ${settings?.email || ''} &nbsp;|&nbsp; Bank: ${settings?.bank_name || ''} &nbsp;|&nbsp; Acc: ${settings?.bank_account || ''}
 </div>
 
-<script>window.onload = () => window.print();</script>
 </body>
 </html>`;
 
-  res.setHeader('Content-Type', 'text/html');
-  return res.send(html);
+  return { html, number: `DN-${delivery.id.slice(0, 8).toUpperCase()}` };
+}
+
+export async function downloadWaybillPdf(req: Request, res: Response) {
+  const doc = await buildWaybillHtml(req.params.id);
+  if (!doc) return notFound(res, 'Delivery not found');
+
+  const pdf = await renderPdf(doc.html);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="Waybill-${doc.number}.pdf"`);
+  res.send(pdf);
 }
 
 export async function deleteDelivery(req: Request, res: Response) {

@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Printer, Trash2 } from 'lucide-react';
+import { Plus, Download, Trash2 } from 'lucide-react';
 import { proformaApi, customerApi, settingsApi } from '../services/api';
 import Modal from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { TableSkeleton } from '../components/ui/Skeleton';
-import { getErrorMessage, fmtDate, fmtRWF, openPrintWindow } from '../hooks/useToastHelper';
+import { getErrorMessage, fmtDate, fmtRWF, downloadPdf } from '../hooks/useToastHelper';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import { PRODUCTS, getBrickLabel } from '../constants/products';
@@ -135,10 +135,10 @@ export default function ProformasPage() {
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => openPrintWindow(() => proformaApi.printHtml(p.id).then(r => r.data))}
+                            onClick={() => downloadPdf(() => proformaApi.downloadPdf(p.id).then(r => r.data), `Proforma-${p.number}.pdf`)}
                             className="flex items-center gap-1 text-xs text-primary hover:underline"
                           >
-                            <Printer size={13} /> Print
+                            <Download size={13} /> Download PDF
                           </button>
                           {isAdmin && (
                             <>
