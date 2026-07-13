@@ -43,6 +43,7 @@ import auditRoutes from './routes/auditRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import importRoutes from './routes/importRoutes';
 import { errorHandler } from './middleware/errorHandler';
+import { runNotificationChecks } from './controllers/notificationController';
 
 const app = express();
 
@@ -111,5 +112,13 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`OPTIMA CLAYS API running on port ${PORT}`);
 });
+
+// Low stock and overdue invoice checks used to only run when someone had the
+// app open, so a shortage or a missed payment could go unnoticed for days if
+// nobody happened to visit. Run it on startup and then hourly regardless.
+runNotificationChecks().catch(err => console.error('Notification check failed:', err));
+setInterval(() => {
+  runNotificationChecks().catch(err => console.error('Notification check failed:', err));
+}, 60 * 60 * 1000);
 
 export default app;
