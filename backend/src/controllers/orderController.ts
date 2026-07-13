@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { ok, created, notFound, badRequest } from '../utils/response';
+import { getAvailableStock } from './inventoryController';
 
 export async function listOrders(req: Request, res: Response) {
   const orders = await prisma.order.findMany({
@@ -25,6 +26,14 @@ export async function createOrder(req: Request, res: Response) {
   const qty = Number(quantity);
   const price = Number(unit_price);
   const total = qty * price;
+  const grade = quality_grade || 'GRADE_A';
+
+  if (brick_type !== 'CUSTOM') {
+    const available = await getAvailableStock(brick_type, grade);
+    if (available < qty) {
+      return badRequest(res, `Not enough stock. Available: ${available.toLocaleString()}, requested: ${qty.toLocaleString()}`);
+    }
+  }
 
   if (customer.credit_limit > 0) {
     const outstanding = await getCustomerOutstanding(customerId);
@@ -41,7 +50,7 @@ export async function createOrder(req: Request, res: Response) {
       quantity: qty,
       unit_price: price,
       total_amount: total,
-      quality_grade: quality_grade || 'GRADE_A',
+      quality_grade: grade,
       notes: notes || null,
       order_date: order_date ? new Date(order_date) : new Date(),
     },
@@ -69,6 +78,13 @@ export async function updateOrder(req: Request, res: Response) {
   const price = unit_price != null ? Number(unit_price) : order.unit_price;
   if (qty <= 0) return badRequest(res, 'quantity must be positive');
   if (price <= 0) return badRequest(res, 'unit_price must be positive');
+
+  if (qty > order.quantity && order.brick_type !== 'CUSTOM') {
+    const available = await getAvailableStock(order.brick_type, order.quality_grade);
+    if (available < qty) {
+      return badRequest(res, `Not enough stock. Available: ${available.toLocaleString()}, requested: ${qty.toLocaleString()}`);
+    }
+  }
 
   const updated = await prisma.order.update({
     where: { id: req.params.id },

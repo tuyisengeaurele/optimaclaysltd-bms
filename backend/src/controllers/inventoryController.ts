@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { MaterialType } from '@prisma/client';
+import { MaterialType, BrickType, QualityGrade } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ok, created, notFound, badRequest } from '../utils/response';
 
@@ -44,7 +44,28 @@ export async function consumeRawMaterial(req: Request, res: Response) {
 
 export async function listFinishedGoods(req: Request, res: Response) {
   const stocks = await prisma.finishedGoodsStock.findMany({ orderBy: { date: 'desc' } });
-  return ok(res, stocks);
+
+  const summary = new Map<string, { brick_type: string; quality_grade: string; current_stock: number }>();
+  for (const s of stocks) {
+    const key = `${s.brick_type}::${s.quality_grade}`;
+    const existing = summary.get(key);
+    if (existing) {
+      existing.current_stock += s.quantity;
+    } else {
+      summary.set(key, { brick_type: s.brick_type, quality_grade: s.quality_grade, current_stock: s.quantity });
+    }
+  }
+
+  return ok(res, { stocks, summary: Array.from(summary.values()) });
+}
+
+// Total units currently on hand for a brick type and grade, summed across every stock entry
+export async function getAvailableStock(brick_type: BrickType, quality_grade: QualityGrade): Promise<number> {
+  const result = await prisma.finishedGoodsStock.aggregate({
+    where: { brick_type, quality_grade },
+    _sum: { quantity: true },
+  });
+  return result._sum.quantity || 0;
 }
 
 export async function addFinishedGoods(req: Request, res: Response) {
