@@ -58,7 +58,7 @@ export async function deleteCategory(req: Request, res: Response) {
   const category = await prisma.expenseCategoryConfig.findUnique({ where: { id: req.params.id } });
   if (!category) return notFound(res, 'Category not found');
   const inUse = await prisma.expense.count({ where: { category: category.name } });
-  if (inUse > 0) return badRequest(res, `Cannot delete — ${inUse} expense(s) use this category`);
+  if (inUse > 0) return badRequest(res, `Cannot delete: ${inUse} expense(s) use this category`);
   await prisma.expenseCategoryConfig.delete({ where: { id: req.params.id } });
   return ok(res, { deleted: true });
 }

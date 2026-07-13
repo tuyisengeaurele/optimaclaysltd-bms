@@ -66,7 +66,7 @@ export async function runNotificationChecks() {
           data: {
             type: 'LOW_STOCK',
             title: 'Low Stock Alert',
-            message: `${threshold.material_type.replace(/_/g, ' ')} is at ${remaining.toFixed(1)} ${threshold.unit} — below threshold of ${threshold.threshold} ${threshold.unit}`,
+            message: `${threshold.material_type.replace(/_/g, ' ')} is at ${remaining.toFixed(1)} ${threshold.unit}, below the threshold of ${threshold.threshold} ${threshold.unit}`,
             resource: threshold.material_type,
           },
         });

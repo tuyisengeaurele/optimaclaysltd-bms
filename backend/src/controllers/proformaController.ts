@@ -183,7 +183,7 @@ export async function printProforma(req: Request, res: Response) {
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Proforma Invoice — ${proforma.number}</title>
+<title>Proforma Invoice ${proforma.number}</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 13px; color: #1a1a2e; background: #eef0f4; }
@@ -305,7 +305,7 @@ export async function printProforma(req: Request, res: Response) {
   <!-- ADDRESSES -->
   <div class="addr-row">
     <div class="addr-cell">
-      <div class="addr-lbl">From — Seller</div>
+      <div class="addr-lbl">From (Seller)</div>
       <table class="addr-tbl">
         <tr><td>Company:</td><td>${co.name}</td></tr>
         <tr><td>TIN:</td><td>${co.tin}</td></tr>
@@ -316,7 +316,7 @@ export async function printProforma(req: Request, res: Response) {
       </table>
     </div>
     <div class="addr-cell">
-      <div class="addr-lbl">To — Buyer</div>
+      <div class="addr-lbl">To (Buyer)</div>
       <table class="addr-tbl">
         <tr><td>${customer.customer_type === 'COMPANY' ? 'Company:' : 'Name:'}</td><td>${clientName || '—'}</td></tr>
         ${clientTin       ? `<tr><td>TIN:</td><td>${clientTin}</td></tr>` : ''}
@@ -335,7 +335,7 @@ export async function printProforma(req: Request, res: Response) {
     </div>
     <div class="term-cell">
       <div class="term-lbl">Payment Method</div>
-      <div class="term-val">Bank Transfer — ${co.bank_name}</div>
+      <div class="term-val">Bank Transfer via ${co.bank_name}</div>
     </div>
   </div>
   <div class="terms" style="border-top:none;padding-top:0;">
@@ -429,6 +429,7 @@ export async function printProforma(req: Request, res: Response) {
   <button class="print-btn" onclick="window.print()">&#128438; Print / Save as PDF</button>
 </div>
 
+<script>window.addEventListener('load', function () { window.print(); });</script>
 </body>
 </html>`;
 

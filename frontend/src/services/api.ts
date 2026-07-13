@@ -137,7 +137,7 @@ export const proformaApi = {
   }) => api.post('/proforma', data),
   get: (id: string) => api.get(`/proforma/${id}`),
   delete: (id: string) => api.delete(`/proforma/${id}`),
-  printUrl: (id: string) => `${api.defaults.baseURL}/proforma/${id}/print`,
+  printHtml: (id: string) => api.get(`/proforma/${id}/print`, { responseType: 'text' }),
 };
 
 export const invoiceApi = {
@@ -158,7 +158,7 @@ export const deliveryApi = {
   updateStatus: (id: string, data: any) => api.put(`/deliveries/${id}/status`, data),
   recordDamage: (id: string, data: any) => api.put(`/deliveries/${id}/damage`, data),
   delete: (id: string) => api.delete(`/deliveries/${id}`),
-  waybillUrl: (id: string) => `${api.defaults.baseURL}/deliveries/${id}/waybill`,
+  waybillHtml: (id: string) => api.get(`/deliveries/${id}/waybill`, { responseType: 'text' }),
 };
 
 export const expenseApi = {

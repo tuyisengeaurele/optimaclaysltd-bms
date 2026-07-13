@@ -6,7 +6,7 @@ import Modal from '../components/ui/Modal';
 import Badge, { statusBadge } from '../components/ui/Badge';
 import { useToast } from '../components/ui/Toast';
 import { TableSkeleton } from '../components/ui/Skeleton';
-import { getErrorMessage, fmtDate, fmtRWF } from '../hooks/useToastHelper';
+import { getErrorMessage, fmtDate, fmtRWF, openPrintWindow } from '../hooks/useToastHelper';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 
@@ -94,9 +94,9 @@ export default function DeliveriesPage() {
                         <div className="flex gap-1 items-center flex-wrap">
                           <button onClick={() => { setSelected(d); setStatusForm({ status: d.status, actual_delivery_date: new Date().toISOString().slice(0,10), notes: '', receiver_name: d.receiver_name || '' }); setModal('status'); }} className="text-xs text-primary hover:underline">Update</button>
                           <span className="text-muted-foreground">·</span>
-                          <a href={deliveryApi.waybillUrl(d.id)} target="_blank" rel="noreferrer" title="Print Waybill" className="text-xs text-accent hover:underline flex items-center gap-0.5">
+                          <button type="button" onClick={() => openPrintWindow(() => deliveryApi.waybillHtml(d.id).then(r => r.data), toast)} title="Print Waybill" className="text-xs text-accent hover:underline flex items-center gap-0.5">
                             <Printer size={11} /> Waybill
-                          </a>
+                          </button>
                           {d.status === 'DELIVERED' && (
                             <>
                               <span className="text-muted-foreground">·</span>
