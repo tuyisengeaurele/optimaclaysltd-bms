@@ -48,8 +48,22 @@ export async function listProformas(req: Request, res: Response) {
 
 // ── CREATE ───────────────────────────────────────────────────────────────────
 export async function createProforma(req: Request, res: Response) {
-  const { customerId, brick_type, custom_name, quantity, unit_price, notes,
-          valid_until, payment_terms, delivery_period } = req.body;
+  const { orderId } = req.body;
+  let { customerId, brick_type, custom_name, quantity, unit_price, notes,
+        valid_until, payment_terms, delivery_period } = req.body;
+
+  // Generating a proforma from an existing order (the Orders page "PRO" action)
+  // only sends orderId, relying on the order's own fields rather than asking
+  // the caller to repeat them.
+  if (orderId) {
+    const order = await prisma.order.findFirst({ where: { id: orderId, deletedAt: null } });
+    if (!order) return notFound(res, 'Order not found');
+    customerId  = customerId  ?? order.customerId;
+    brick_type  = brick_type  ?? order.brick_type;
+    custom_name = custom_name ?? order.custom_name;
+    quantity    = quantity    ?? order.quantity;
+    unit_price  = unit_price  ?? order.unit_price;
+  }
 
   if (!customerId)  return badRequest(res, 'Customer is required');
   if (!brick_type)  return badRequest(res, 'Brick type is required');
@@ -86,6 +100,7 @@ export async function createProforma(req: Request, res: Response) {
     return tx.proformaInvoice.create({
       data: {
         number, customerId,
+        orderId: orderId || null,
         brick_type, custom_name: custom_name || null,
         quantity: qty, unit_price: price,
         date_issued: dateIssued, valid_until: validUntil,
