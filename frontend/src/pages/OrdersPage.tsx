@@ -118,7 +118,7 @@ export default function OrdersPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-accent">Orders</h1>
-        <button className="btn-primary flex items-center gap-2" onClick={() => { setForm({ ...EMPTY }); setModal('create'); }}>
+        <button className="btn-primary flex items-center gap-2" onClick={() => { setForm({ ...EMPTY, unit_price: priceMap[EMPTY.brick_type] ?? 0 }); setModal('create'); }}>
           <Plus size={16} /> New Order
         </button>
       </div>

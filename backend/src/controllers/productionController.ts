@@ -83,14 +83,16 @@ export async function completeBatch(req: Request, res: Response) {
   if (!batch) return notFound(res, 'Production batch not found');
   if (batch.completed_at) return badRequest(res, 'Batch is already completed');
 
-  const { bricks_produced, bricks_rejected, rejection_reason, defect_types, reject_disposition } = req.body;
+  const { bricks_produced, rejection_reason, defect_types, reject_disposition } = req.body;
   const produced = Number(bricks_produced);
-  const rejected = Number(bricks_rejected ?? 0);
   if (bricks_produced == null || isNaN(produced) || produced < 0) return badRequest(res, 'bricks_produced must be a non-negative number');
-  if (isNaN(rejected) || rejected < 0) return badRequest(res, 'bricks_rejected must be a non-negative number');
-  if (rejected > produced) return badRequest(res, 'Rejected cannot exceed produced');
+  if (produced > batch.bricks_target) return badRequest(res, 'Produced cannot exceed the target quantity loaded');
 
-  const goodQty = produced - rejected;
+  // Rejected is always derived from what was loaded versus what actually came out,
+  // rather than trusting a client-supplied count, so it can never drift from the
+  // batch's own numbers.
+  const rejected = batch.bricks_target - produced;
+  const goodQty = produced;
 
   const updated = await prisma.$transaction(async (tx) => {
     const result = await tx.productionBatch.update({

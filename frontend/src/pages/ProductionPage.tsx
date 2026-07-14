@@ -23,7 +23,7 @@ const EMPTY_START = {
   brick_type: 'BRICK_10', custom_name: '', bricks_target: 0, current_stage: 'RAW_MIXING',
 };
 
-const EMPTY_COMPLETE = { bricks_produced: 0, bricks_rejected: 0, rejection_reason: '', defect_types: [] as string[], reject_disposition: '' };
+const EMPTY_COMPLETE = { bricks_produced: 0, rejection_reason: '', defect_types: [] as string[], reject_disposition: '' };
 
 export default function ProductionPage() {
   const qc = useQueryClient();
@@ -106,6 +106,8 @@ export default function ProductionPage() {
       defect_types: f.defect_types.includes(defect) ? f.defect_types.filter((d: string) => d !== defect) : [...f.defect_types, defect],
     }));
   }
+
+  const rejectedQty = Math.max(0, (selected?.bricks_target ?? 0) - (completeForm.bricks_produced ?? 0));
 
   const stageColor: Record<string, any> = {
     RAW_MIXING: 'muted', MOLDING: 'info', DRYING: 'warning',
@@ -270,20 +272,24 @@ export default function ProductionPage() {
       <Modal open={modal === 'complete'} onClose={() => setModal(null)} title="Complete Batch" size="lg">
         <form onSubmit={e => { e.preventDefault(); complete.mutate(completeForm); }} className="grid grid-cols-2 gap-4">
           <p className="col-span-2 text-sm text-muted-foreground">
-            Record what actually came out of the kiln for this batch. The good output is added to finished goods stock automatically once you save.
+            Record what actually came out of the kiln for this batch. Rejected is the difference between what was loaded and what came out, calculated automatically. The good output is added to finished goods stock once you save.
           </p>
           <div>
-            <label className="label">Produced</label>
-            <input type="number" className="input" value={completeForm.bricks_produced} onChange={e => {
-              const produced = Number(e.target.value);
-              setCompleteForm({ ...completeForm, bricks_produced: produced, bricks_rejected: Math.min(completeForm.bricks_rejected, produced) });
-            }} required />
+            <label className="label">Target Loaded <span className="text-xs text-muted-foreground">(read-only)</span></label>
+            <input type="number" className="input bg-background" value={selected?.bricks_target ?? 0} disabled />
           </div>
           <div>
-            <label className="label">Rejected</label>
-            <input type="number" className="input" value={completeForm.bricks_rejected} max={completeForm.bricks_produced} onChange={e => setCompleteForm({ ...completeForm, bricks_rejected: Math.min(Number(e.target.value), completeForm.bricks_produced) })} />
+            <label className="label">Produced</label>
+            <input type="number" className="input" value={completeForm.bricks_produced} max={selected?.bricks_target} onChange={e => {
+              const produced = Math.min(Number(e.target.value), selected?.bricks_target ?? Number(e.target.value));
+              setCompleteForm({ ...completeForm, bricks_produced: produced });
+            }} required />
           </div>
-          {completeForm.bricks_rejected > 0 && (
+          <div className="col-span-2">
+            <label className="label">Rejected <span className="text-xs text-muted-foreground">(target loaded minus produced)</span></label>
+            <input type="number" className="input bg-background text-danger font-semibold" value={rejectedQty} disabled />
+          </div>
+          {rejectedQty > 0 && (
             <div>
               <label className="label">Reject Disposition</label>
               <select className="input" value={completeForm.reject_disposition} onChange={e => setCompleteForm({ ...completeForm, reject_disposition: e.target.value })}>
@@ -293,12 +299,12 @@ export default function ProductionPage() {
             </div>
           )}
           <div className="col-span-2 bg-background p-3 rounded-lg text-sm">
-            <strong>Good output:</strong> {Math.max(0, completeForm.bricks_produced - completeForm.bricks_rejected).toLocaleString()} units will be added to stock
-            {completeForm.reject_disposition === 'DOWNGRADE_TO_B' && completeForm.bricks_rejected > 0 && (
-              <> · {completeForm.bricks_rejected.toLocaleString()} rejected units will be added as Grade B stock</>
+            <strong>Good output:</strong> {completeForm.bricks_produced.toLocaleString()} units will be added to stock
+            {completeForm.reject_disposition === 'DOWNGRADE_TO_B' && rejectedQty > 0 && (
+              <> · {rejectedQty.toLocaleString()} rejected units will be added as Grade B stock</>
             )}
           </div>
-          {completeForm.bricks_rejected > 0 && (
+          {rejectedQty > 0 && (
             <div className="col-span-2">
               <label className="label">Defect Types <span className="text-xs text-muted-foreground">(select all that apply)</span></label>
               <div className="flex flex-wrap gap-2 mt-1">
@@ -311,7 +317,7 @@ export default function ProductionPage() {
               </div>
             </div>
           )}
-          {completeForm.bricks_rejected > 0 && (
+          {rejectedQty > 0 && (
             <div className="col-span-2">
               <label className="label">Rejection Reason</label>
               <input className="input" value={completeForm.rejection_reason} onChange={e => setCompleteForm({ ...completeForm, rejection_reason: e.target.value })} />
