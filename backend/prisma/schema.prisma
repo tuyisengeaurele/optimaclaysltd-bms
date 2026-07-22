@@ -223,6 +223,7 @@ model ProductionBatch {
   reject_disposition RejectDisposition?
   current_stage      ProductionStage    @default(RAW_MIXING)
   completed_at       DateTime?
+  consumptions       RawMaterialConsumption[]
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   deletedAt          DateTime?
@@ -260,13 +261,15 @@ model RawMaterialStock {
 }
 
 model RawMaterialConsumption {
-  id            String       @id @default(uuid())
-  material_type MaterialType
-  quantity_used Float
-  date          DateTime
-  notes         String?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  id                String           @id @default(uuid())
+  material_type     MaterialType
+  quantity_used     Float
+  date              DateTime
+  notes             String?
+  productionBatchId String?
+  productionBatch   ProductionBatch? @relation(fields: [productionBatchId], references: [id])
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 }
 
 model StockThreshold {

@@ -74,6 +74,7 @@ export interface ProductionBatch {
   rejection_reason?: string;
   current_stage: ProductionStage;
   completed_at?: string | null;
+  consumptions?: { material_type: MaterialType; quantity_used: number }[];
 }
 
 export type MaterialType = 'CLAY' | 'SAND' | 'FUEL_FIREWOOD' | 'FUEL_COAL' | 'DIESEL' | 'CEMENT' | 'OTHER';
