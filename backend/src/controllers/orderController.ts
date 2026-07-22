@@ -6,7 +6,7 @@ import { getAvailableStock } from './inventoryController';
 export async function listOrders(req: Request, res: Response) {
   const orders = await prisma.order.findMany({
     where: { deletedAt: null },
-    include: { customer: true },
+    include: { customer: true, invoices: { select: { id: true } } },
     orderBy: { order_date: 'desc' },
   });
   return ok(res, orders);
