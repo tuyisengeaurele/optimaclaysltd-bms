@@ -14,7 +14,8 @@ import { useAuth } from '../context/AuthContext';
 
 const BRICK_TYPES = Object.keys(PRODUCTS);
 const GRADES = ['GRADE_A','GRADE_B','REJECT'];
-const STATUSES = ['PENDING','CONFIRMED','IN_PRODUCTION','READY','DELIVERED','CANCELLED'];
+// DELIVERED is set automatically when the linked delivery is completed, not chosen manually here.
+const STATUSES = ['PENDING','CONFIRMED','IN_PRODUCTION','READY','CANCELLED'];
 
 const EMPTY = { customerId: '', brick_type: 'BRICK_10', quality_grade: 'GRADE_A', quantity: 0, unit_price: 0, order_date: new Date().toISOString().slice(0,10), required_delivery_date: '', notes: '' };
 
@@ -265,12 +266,16 @@ export default function OrdersPage() {
       <Modal open={modal === 'status'} onClose={() => setModal(null)} title="Update Order Status">
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">Order: {selected?.customer?.company_name || selected?.customer?.full_name}</p>
-          <div>
-            <label className="label">New Status</label>
-            <select className="input" defaultValue={selected?.status} onChange={e => updateStatus.mutate({ id: selected!.id, status: e.target.value })}>
-              {STATUSES.map(s => <option key={s}>{s}</option>)}
-            </select>
-          </div>
+          {selected?.status === 'DELIVERED' ? (
+            <p className="text-sm text-muted-foreground">This order has been delivered. Its status is set automatically from the linked delivery and cannot be changed here.</p>
+          ) : (
+            <div>
+              <label className="label">New Status</label>
+              <select className="input" defaultValue={selected?.status} onChange={e => updateStatus.mutate({ id: selected!.id, status: e.target.value })}>
+                {STATUSES.map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+          )}
           <button className="btn-outline w-full" onClick={() => setModal(null)}>Close</button>
         </div>
       </Modal>

@@ -112,6 +112,9 @@ export async function updateOrderStatus(req: Request, res: Response) {
   if (!order) return notFound(res, 'Order not found');
   const { status, notes } = req.body;
   if (!status) return badRequest(res, 'status is required');
+  // DELIVERED is only ever set from the delivery completion flow, which has its
+  // own record of what was actually delivered, not from a manual status change here.
+  if (status === 'DELIVERED') return badRequest(res, 'Delivered status is set automatically when a delivery is completed');
   const updated = await prisma.order.update({
     where: { id: req.params.id },
     data: { status, ...(notes !== undefined ? { notes } : {}) },
