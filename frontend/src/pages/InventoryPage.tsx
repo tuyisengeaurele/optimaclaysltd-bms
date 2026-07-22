@@ -78,7 +78,7 @@ export default function InventoryPage() {
               <button className="btn-outline text-sm flex items-center gap-1.5" onClick={() => { setForm({ material_type: 'CLAY', threshold: 0, unit: 'kg' }); setModal('threshold'); }}>
                 <SlidersHorizontal size={14} /> Set Threshold
               </button>
-              <button className="btn-outline text-sm" onClick={() => { setForm({ material_type: 'CLAY', quantity: 0, unit: 'kg', unit_cost: 0, total_cost: 0, supplier: '', date: new Date().toISOString().slice(0,10) }); setSupplierOther(false); setModal('add-raw'); }}>+ Add Stock</button>
+              <button className="btn-outline text-sm" onClick={() => { setForm({ material_type: 'CLAY', quantity: 0, unit: 'kg', unit_cost: 0, total_cost: 0, supplierId: '', supplier_name: '', date: new Date().toISOString().slice(0,10) }); setSupplierOther(false); setModal('add-raw'); }}>+ Add Stock</button>
               <button className="btn-secondary text-sm" onClick={() => { setForm({ material_type: 'CLAY', quantity_used: 0, date: new Date().toISOString().slice(0,10) }); setModal('consume'); }}>Record Consumption</button>
             </>
           )}
@@ -130,7 +130,7 @@ export default function InventoryPage() {
                       <td className="px-3 py-3">{s.unit}</td>
                       <td className="px-3 py-3">{s.unit_cost?.toLocaleString()}</td>
                       <td className="px-3 py-3 font-medium">{s.total_cost?.toLocaleString()}</td>
-                      <td className="px-3 py-3 text-muted-foreground">{s.supplier || '-'}</td>
+                      <td className="px-3 py-3 text-muted-foreground">{s.supplier?.name || '-'}</td>
                     </tr>
                   ))}
                   {stocks.length === 0 && <tr><td colSpan={7} className="px-3 py-6 text-center text-muted-foreground">No stock records</td></tr>}
@@ -199,22 +199,22 @@ export default function InventoryPage() {
             <label className="label">Supplier</label>
             <select
               className="input"
-              value={supplierOther ? SUPPLIER_OTHER : (form.supplier || '')}
+              value={supplierOther ? SUPPLIER_OTHER : (form.supplierId || '')}
               onChange={e => {
-                if (e.target.value === SUPPLIER_OTHER) { setSupplierOther(true); setForm({ ...form, supplier: '' }); }
-                else { setSupplierOther(false); setForm({ ...form, supplier: e.target.value }); }
+                if (e.target.value === SUPPLIER_OTHER) { setSupplierOther(true); setForm({ ...form, supplierId: '', supplier_name: '' }); }
+                else { setSupplierOther(false); setForm({ ...form, supplierId: e.target.value, supplier_name: '' }); }
               }}
             >
               <option value="">-- Select Supplier --</option>
-              {(suppliers as any[]).map((s: any) => <option key={s.id} value={s.name}>{s.name}</option>)}
+              {(suppliers as any[]).map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
               <option value={SUPPLIER_OTHER}>Not listed...</option>
             </select>
             {supplierOther && (
               <input
                 className="input mt-2"
                 placeholder="Enter supplier name"
-                value={form.supplier || ''}
-                onChange={e => setForm({ ...form, supplier: e.target.value })}
+                value={form.supplier_name || ''}
+                onChange={e => setForm({ ...form, supplier_name: e.target.value })}
               />
             )}
           </div>

@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma';
 import { ok, created, notFound, badRequest } from '../utils/response';
 
 export async function listRawMaterials(req: Request, res: Response) {
-  const stocks = await prisma.rawMaterialStock.findMany({ orderBy: { date: 'desc' } });
+  const stocks = await prisma.rawMaterialStock.findMany({ orderBy: { date: 'desc' }, include: { supplier: true } });
   const consumptions = await prisma.rawMaterialConsumption.findMany();
   const thresholds = await prisma.stockThreshold.findMany();
 
@@ -27,9 +27,25 @@ export async function listRawMaterials(req: Request, res: Response) {
 }
 
 export async function addRawMaterial(req: Request, res: Response) {
-  const { material_type, quantity, unit, unit_cost, total_cost, supplier, date, notes } = req.body;
+  const { material_type, quantity, unit, unit_cost, total_cost, supplierId, supplier_name, date, notes } = req.body;
+
+  // supplier is a relation, not a free-text field. A supplier picked from the list
+  // sends supplierId directly; a "not listed" name creates a real Supplier record
+  // on the fly so it becomes reusable next time instead of being freeform text.
+  let resolvedSupplierId: string | null = supplierId || null;
+  if (!resolvedSupplierId && supplier_name) {
+    const newSupplier = await prisma.supplier.create({ data: { name: supplier_name } });
+    resolvedSupplierId = newSupplier.id;
+  }
+
   const stock = await prisma.rawMaterialStock.create({
-    data: { material_type, quantity: Number(quantity), unit, unit_cost: Number(unit_cost), total_cost: Number(total_cost), supplier, date: new Date(date), notes },
+    data: {
+      material_type, quantity: Number(quantity), unit,
+      unit_cost: Number(unit_cost), total_cost: Number(total_cost),
+      supplierId: resolvedSupplierId,
+      date: new Date(date), notes,
+    },
+    include: { supplier: true },
   });
   return created(res, stock);
 }
