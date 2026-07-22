@@ -57,7 +57,7 @@ export const payrollApi = {
   finalize: (runId: string) => api.post(`/payroll/${runId}/finalize`),
   delete: (runId: string) => api.delete(`/payroll/${runId}`),
   exportUrl: (runId: string) => `${api.defaults.baseURL}/payroll/${runId}/export`,
-  payslipUrl: (runId: string, employeeId: string) => `${api.defaults.baseURL}/payroll/${runId}/payslip/${employeeId}`,
+  downloadPayslip: (runId: string, employeeId: string) => api.get(`/payroll/${runId}/payslip/${employeeId}`, { responseType: 'blob' }),
 };
 
 export const attendanceApi = {

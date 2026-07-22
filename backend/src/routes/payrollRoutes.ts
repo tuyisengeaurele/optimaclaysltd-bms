@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { listPayrollRuns, createPayrollRun, getPayrollRun, updateEntry, finalizeRun, exportPayroll, getPayslip, deletePayrollRun } from '../controllers/payrollController';
+import { listPayrollRuns, createPayrollRun, getPayrollRun, updateEntry, finalizeRun, exportPayroll, downloadPayslipPdf, deletePayrollRun } from '../controllers/payrollController';
 import { authenticate, authorize } from '../middleware/auth';
 import { auditLog } from '../middleware/audit';
 
@@ -14,6 +14,6 @@ router.put('/:runId/entries/:entryId', authorize('ADMIN', 'ACCOUNTANT'), updateE
 router.post('/:runId/finalize', authorize('ADMIN', 'ACCOUNTANT'), finalizeRun);
 router.delete('/:runId', authorize('ADMIN', 'ACCOUNTANT'), deletePayrollRun);
 router.get('/:runId/export', authorize('ADMIN', 'ACCOUNTANT'), exportPayroll);
-router.get('/:runId/payslip/:employeeId', authorize('ADMIN', 'ACCOUNTANT'), getPayslip);
+router.get('/:runId/payslip/:employeeId', authorize('ADMIN', 'ACCOUNTANT'), downloadPayslipPdf);
 
 export default router;
