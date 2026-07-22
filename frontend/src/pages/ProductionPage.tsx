@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Plus, Pencil, Trash2, CheckCircle2 } from 'lucide-react';
-import { productionApi, kilnApi } from '../services/api';
+import { productionApi, kilnApi, inventoryApi } from '../services/api';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { ProductionBatch } from '../types';
 import Modal from '../components/ui/Modal';
@@ -17,10 +17,12 @@ const OPEN_STAGES = ['RAW_MIXING', 'MOLDING', 'DRYING', 'KILN_FIRING', 'QUALITY_
 const BRICK_TYPES = Object.keys(PRODUCTS);
 const DEFECT_TYPES = ['CRACKING', 'UNDER_FIRING', 'OVER_FIRING', 'DIMENSION_ERROR', 'COLOUR_VARIATION', 'OTHER'];
 const DISPOSITIONS = ['REWORK', 'DOWNGRADE_TO_B', 'DISPOSE'];
+const MATERIALS = ['CLAY', 'SAND', 'FUEL_FIREWOOD', 'FUEL_COAL', 'DIESEL', 'CEMENT', 'OTHER'];
 
 const EMPTY_START = {
   date: new Date().toISOString().slice(0, 10), shift: 'MORNING', kilnId: '', kiln_number: '',
   brick_type: 'BRICK_10', custom_name: '', bricks_target: 0, current_stage: 'RAW_MIXING',
+  materials_used: [] as { material_type: string; quantity_used: number }[],
 };
 
 const EMPTY_COMPLETE = { bricks_produced: 0, rejection_reason: '', defect_types: [] as string[], reject_disposition: '' };
@@ -53,10 +55,17 @@ export default function ProductionPage() {
     queryFn: () => kilnApi.list().then(r => r.data.data),
   });
 
+  const { data: rawData } = useQuery<any>({
+    queryKey: ['inventory-raw'],
+    queryFn: () => inventoryApi.listRaw().then(r => r.data.data),
+  });
+  const rawSummary: any[] = rawData?.summary || [];
+
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ['production'] });
     qc.invalidateQueries({ queryKey: ['production-stats'] });
     qc.invalidateQueries({ queryKey: ['inventory-finished'] });
+    qc.invalidateQueries({ queryKey: ['inventory-raw'] });
   };
 
   const save = useMutation({
@@ -88,16 +97,36 @@ export default function ProductionPage() {
     onError: err => toast(getErrorMessage(err), 'error'),
   });
 
-  function openStart() { setSelected(null); setForm({ ...EMPTY_START }); setModal('start'); }
+  function openStart() { setSelected(null); setForm({ ...EMPTY_START, materials_used: [] }); setModal('start'); }
   function openEdit(b: ProductionBatch) {
     setSelected(b);
-    setForm({ ...b, date: b.date.slice(0, 10), kilnId: (b as any).kilnId || '', custom_name: b.custom_name || '' });
+    setForm({
+      ...b, date: b.date.slice(0, 10), kilnId: (b as any).kilnId || '', custom_name: b.custom_name || '',
+      materials_used: (b.consumptions || []).map(c => ({ material_type: c.material_type, quantity_used: c.quantity_used })),
+    });
     setModal('edit');
   }
   function openComplete(b: ProductionBatch) {
     setSelected(b);
     setCompleteForm({ ...EMPTY_COMPLETE, bricks_produced: b.bricks_target });
     setModal('complete');
+  }
+
+  function addMaterialRow() {
+    setForm((f: any) => ({ ...f, materials_used: [...f.materials_used, { material_type: 'CLAY', quantity_used: 0 }] }));
+  }
+  function updateMaterialRow(idx: number, field: 'material_type' | 'quantity_used', value: string | number) {
+    setForm((f: any) => ({
+      ...f,
+      materials_used: f.materials_used.map((m: any, i: number) => i === idx ? { ...m, [field]: value } : m),
+    }));
+  }
+  function removeMaterialRow(idx: number) {
+    setForm((f: any) => ({ ...f, materials_used: f.materials_used.filter((_: any, i: number) => i !== idx) }));
+  }
+  function availableFor(material_type: string) {
+    const s = rawSummary.find(s => s.material_type === material_type);
+    return { qty: s?.current_stock ?? 0, unit: s?.unit || '' };
   }
 
   function toggleDefect(defect: string) {
@@ -165,7 +194,7 @@ export default function ProductionPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="table-header">
-                  {['Date','Shift','Kiln','Product','Target','Produced','Rejected','Stage','Actions'].map(h => (
+                  {['Date','Shift','Kiln','Product','Materials Used','Target','Produced','Rejected','Stage','Actions'].map(h => (
                     <th key={h} className="px-3 py-3 text-left first:rounded-l last:rounded-r">{h}</th>
                   ))}
                 </tr>
@@ -177,6 +206,11 @@ export default function ProductionPage() {
                     <td className="px-3 py-3">{b.shift}</td>
                     <td className="px-3 py-3">{b.kiln_number}</td>
                     <td className="px-3 py-3">{b.brick_type === 'CUSTOM' ? (b.custom_name || 'Custom') : PRODUCTS[b.brick_type]?.name}</td>
+                    <td className="px-3 py-3 text-xs text-muted-foreground">
+                      {b.consumptions?.length
+                        ? b.consumptions.map(c => `${c.material_type.replace(/_/g, ' ')}: ${c.quantity_used.toLocaleString()}`).join(', ')
+                        : '-'}
+                    </td>
                     <td className="px-3 py-3">{b.bricks_target?.toLocaleString()}</td>
                     <td className="px-3 py-3 font-medium">{b.completed_at ? b.bricks_produced?.toLocaleString() : <span className="text-muted-foreground">Pending</span>}</td>
                     <td className="px-3 py-3 text-danger">{b.completed_at ? b.bricks_rejected?.toLocaleString() : <span className="text-muted-foreground">-</span>}</td>
@@ -195,7 +229,7 @@ export default function ProductionPage() {
                   </tr>
                 ))}
                 {batches.length === 0 && (
-                  <tr><td colSpan={9} className="px-3 py-6 text-center text-muted-foreground">No batches recorded</td></tr>
+                  <tr><td colSpan={10} className="px-3 py-6 text-center text-muted-foreground">No batches recorded</td></tr>
                 )}
               </tbody>
             </table>
@@ -260,6 +294,44 @@ export default function ProductionPage() {
           <div>
             <label className="label">Target Quantity</label>
             <input type="number" className="input" value={form.bricks_target} onChange={e => setForm({ ...form, bricks_target: Number(e.target.value) })} required />
+          </div>
+          <div className="col-span-2">
+            <div className="flex items-center justify-between mb-1">
+              <label className="label !mb-0">Raw Materials Used</label>
+              <button type="button" onClick={addMaterialRow} className="text-xs text-primary hover:underline">+ Add Material</button>
+            </div>
+            {form.materials_used.length === 0 && (
+              <p className="text-xs text-muted-foreground">No materials recorded for this batch yet.</p>
+            )}
+            <div className="space-y-2">
+              {form.materials_used.map((m: any, idx: number) => {
+                const avail = availableFor(m.material_type);
+                return (
+                  <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-background rounded-lg px-3 py-2">
+                    <select
+                      className="input col-span-5"
+                      value={m.material_type}
+                      onChange={e => updateMaterialRow(idx, 'material_type', e.target.value)}
+                    >
+                      {MATERIALS.map(mat => <option key={mat} value={mat}>{mat.replace(/_/g, ' ')}</option>)}
+                    </select>
+                    <div className="col-span-5">
+                      <input
+                        type="number"
+                        className="input"
+                        value={m.quantity_used}
+                        onChange={e => updateMaterialRow(idx, 'quantity_used', Number(e.target.value))}
+                        placeholder="Quantity"
+                      />
+                      <p className={`text-xs mt-0.5 ${m.quantity_used > avail.qty ? 'text-danger' : 'text-muted-foreground'}`}>
+                        available: {avail.qty.toLocaleString()} {avail.unit}
+                      </p>
+                    </div>
+                    <button type="button" onClick={() => removeMaterialRow(idx)} className="col-span-2 text-xs text-danger hover:underline">Remove</button>
+                  </div>
+                );
+              })}
+            </div>
           </div>
           <div className="col-span-2 flex gap-3 justify-end pt-2 border-t border-border">
             <button type="button" className="btn-outline" onClick={() => setModal(null)}>Cancel</button>

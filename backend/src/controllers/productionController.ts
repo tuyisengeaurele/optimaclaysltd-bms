@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { MaterialType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { ok, created, notFound, badRequest } from '../utils/response';
 
@@ -14,7 +15,7 @@ export async function listBatches(req: Request, res: Response) {
       orderBy: { date: 'desc' },
       skip,
       take: Number(limit),
-      include: { kiln: true },
+      include: { kiln: true, consumptions: true },
     }),
     prisma.productionBatch.count({ where }),
   ]);
@@ -24,16 +25,30 @@ export async function listBatches(req: Request, res: Response) {
 // A batch only records what it is targeting for output when it starts. What actually
 // came out of the kiln is only known once firing and quality check are done, so
 // bricks_produced/bricks_rejected/defects are captured later through completeBatch.
+// Raw materials used to produce a batch (e.g. clay, sand) are recorded alongside it
+// instead of only through the standalone Record Consumption action in Inventory, so a
+// batch's own material usage is tracked directly and still deducts from raw stock the
+// same way a standalone consumption entry does.
+function validateMaterialsUsed(materials_used: any): { material_type: MaterialType; quantity_used: number; notes?: string }[] {
+  if (!Array.isArray(materials_used)) return [];
+  return materials_used
+    .filter((m: any) => m && m.material_type && Number(m.quantity_used) > 0)
+    .map((m: any) => ({ material_type: m.material_type, quantity_used: Number(m.quantity_used), notes: m.notes || undefined }));
+}
+
 export async function createBatch(req: Request, res: Response) {
-  const { date, shift, kiln_number, kilnId, brick_type, custom_name, bricks_target, current_stage } = req.body;
+  const { date, shift, kiln_number, kilnId, brick_type, custom_name, bricks_target, current_stage, materials_used } = req.body;
   if (!date) return badRequest(res, 'date is required');
   if (!shift) return badRequest(res, 'shift is required');
   if (!bricks_target || Number(bricks_target) <= 0) return badRequest(res, 'bricks_target must be a positive number');
   if (current_stage === 'STOCKPILED') return badRequest(res, 'A new batch cannot start already stockpiled, complete it instead');
 
+  const materials = validateMaterialsUsed(materials_used);
+  const batchDate = new Date(date);
+
   const batch = await prisma.productionBatch.create({
     data: {
-      date: new Date(date),
+      date: batchDate,
       shift,
       kiln_number: kiln_number || '',
       kilnId: kilnId || null,
@@ -41,8 +56,11 @@ export async function createBatch(req: Request, res: Response) {
       custom_name: custom_name || null,
       bricks_target: Number(bricks_target),
       current_stage: current_stage || 'RAW_MIXING',
+      consumptions: materials.length
+        ? { create: materials.map(m => ({ material_type: m.material_type, quantity_used: m.quantity_used, date: batchDate, notes: m.notes || null })) }
+        : undefined,
     },
-    include: { kiln: true },
+    include: { kiln: true, consumptions: true },
   });
   return created(res, batch);
 }
@@ -55,22 +73,33 @@ export async function updateBatch(req: Request, res: Response) {
   if (!batch) return notFound(res, 'Production batch not found');
   if (batch.completed_at) return badRequest(res, 'Completed batches cannot be edited');
 
-  const { date, shift, kiln_number, kilnId, brick_type, custom_name, bricks_target, current_stage } = req.body;
+  const { date, shift, kiln_number, kilnId, brick_type, custom_name, bricks_target, current_stage, materials_used } = req.body;
   if (current_stage === 'STOCKPILED') return badRequest(res, 'Use the complete action to move a batch to stockpiled');
 
-  const updated = await prisma.productionBatch.update({
-    where: { id: req.params.id },
-    data: {
-      date: date ? new Date(date) : undefined,
-      shift,
-      kiln_number: kiln_number || undefined,
-      kilnId: kilnId !== undefined ? (kilnId || null) : undefined,
-      brick_type,
-      custom_name: custom_name !== undefined ? (custom_name || null) : undefined,
-      bricks_target,
-      current_stage,
-    },
-    include: { kiln: true },
+  const batchDate = date ? new Date(date) : batch.date;
+  const materials = materials_used !== undefined ? validateMaterialsUsed(materials_used) : null;
+
+  const updated = await prisma.$transaction(async (tx) => {
+    if (materials) {
+      await tx.rawMaterialConsumption.deleteMany({ where: { productionBatchId: req.params.id } });
+    }
+    return tx.productionBatch.update({
+      where: { id: req.params.id },
+      data: {
+        date: date ? batchDate : undefined,
+        shift,
+        kiln_number: kiln_number || undefined,
+        kilnId: kilnId !== undefined ? (kilnId || null) : undefined,
+        brick_type,
+        custom_name: custom_name !== undefined ? (custom_name || null) : undefined,
+        bricks_target,
+        current_stage,
+        consumptions: materials?.length
+          ? { create: materials.map(m => ({ material_type: m.material_type, quantity_used: m.quantity_used, date: batchDate, notes: m.notes || null })) }
+          : undefined,
+      },
+      include: { kiln: true, consumptions: true },
+    });
   });
   return ok(res, updated);
 }
