@@ -137,10 +137,13 @@ export default function DeliveriesPage() {
         <form onSubmit={e => { e.preventDefault(); create.mutate(form); }} className="space-y-4">
           <div>
             <label className="label">Order <span className="text-primary">*</span></label>
-            <select className="input" value={form.orderId} onChange={e => setForm({ ...form, orderId: e.target.value })} required>
+            <select className="input" value={form.orderId} onChange={e => {
+              const order = orders.find((o: any) => o.id === e.target.value);
+              setForm({ ...form, orderId: e.target.value, quantity_loaded: order?.quantity ?? 0 });
+            }} required>
               <option value="">-- Select Order --</option>
-              {orders.filter((o: any) => ['CONFIRMED','READY'].includes(o.status)).map((o: any) => (
-                <option key={o.id} value={o.id}>{o.customer?.company_name || o.customer?.full_name}: {o.brick_type === 'CUSTOM' ? (o.custom_name || 'Custom') : o.brick_type.replace(/_/g, ' ')}</option>
+              {orders.filter((o: any) => o.status === 'READY').map((o: any) => (
+                <option key={o.id} value={o.id}>{o.customer?.company_name || o.customer?.full_name}: {o.brick_type === 'CUSTOM' ? (o.custom_name || 'Custom') : o.brick_type.replace(/_/g, ' ')} ({o.quantity?.toLocaleString()})</option>
               ))}
             </select>
           </div>
@@ -148,7 +151,7 @@ export default function DeliveriesPage() {
             <div><label className="label">Driver Name</label><input className="input" value={form.driver_name} onChange={e => setForm({ ...form, driver_name: e.target.value })} /></div>
             <div><label className="label">Vehicle Plate</label><input className="input" value={form.vehicle_plate} onChange={e => setForm({ ...form, vehicle_plate: e.target.value })} /></div>
             <div><label className="label">Scheduled Date</label><input type="date" className="input" value={form.scheduled_date} onChange={e => setForm({ ...form, scheduled_date: e.target.value })} /></div>
-            <div><label className="label">Quantity Loaded</label><input type="number" className="input" value={form.quantity_loaded} onChange={e => setForm({ ...form, quantity_loaded: Number(e.target.value) })} /></div>
+            <div><label className="label">Quantity Loaded <span className="text-xs text-muted-foreground">(from order, editable)</span></label><input type="number" className="input" value={form.quantity_loaded} onChange={e => setForm({ ...form, quantity_loaded: Number(e.target.value) })} /></div>
           </div>
           <div>
             <label className="label">Delivery Fee (RWF)</label>

@@ -5,6 +5,10 @@ import { ok } from '../utils/response';
 function dateRange(req: any) {
   const from = req.query.from ? new Date(req.query.from) : new Date(new Date().getFullYear(), 0, 1);
   const to = req.query.to ? new Date(req.query.to) : new Date();
+  // A "to" of today's date alone parses as midnight, which would exclude every
+  // record from today itself. Extend it to the end of that day so the range is
+  // actually inclusive of the whole day the caller picked.
+  to.setHours(23, 59, 59, 999);
   return { from, to };
 }
 
