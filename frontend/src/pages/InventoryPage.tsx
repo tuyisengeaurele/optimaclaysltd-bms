@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, AlertTriangle, SlidersHorizontal } from 'lucide-react';
-import { inventoryApi } from '../services/api';
+import { inventoryApi, supplierApi } from '../services/api';
 import Modal from '../components/ui/Modal';
 import Badge from '../components/ui/Badge';
 import { useToast } from '../components/ui/Toast';
@@ -12,6 +12,7 @@ import { PRODUCTS, getBrickLabel } from '../constants/products';
 const MATERIALS = ['CLAY','SAND','FUEL_FIREWOOD','FUEL_COAL','DIESEL','CEMENT','OTHER'];
 const BRICK_TYPES = Object.keys(PRODUCTS);
 const GRADES = ['GRADE_A','GRADE_B','REJECT'];
+const SUPPLIER_OTHER = '__OTHER__';
 
 export default function InventoryPage() {
   const qc = useQueryClient();
@@ -19,6 +20,7 @@ export default function InventoryPage() {
   const [tab, setTab] = useState<'raw' | 'finished'>('raw');
   const [modal, setModal] = useState<'add-raw' | 'consume' | 'add-finished' | 'threshold' | null>(null);
   const [form, setForm] = useState<any>({});
+  const [supplierOther, setSupplierOther] = useState(false);
 
   const { data: rawData, isLoading: rawLoading } = useQuery({
     queryKey: ['inventory-raw'],
@@ -27,6 +29,10 @@ export default function InventoryPage() {
   const { data: finishedData, isLoading: finLoading } = useQuery<any>({
     queryKey: ['inventory-finished'],
     queryFn: () => inventoryApi.listFinished().then(r => r.data.data),
+  });
+  const { data: suppliers = [] } = useQuery({
+    queryKey: ['suppliers'],
+    queryFn: () => supplierApi.list().then(r => r.data.data),
   });
   const finishedGoods = finishedData?.stocks || [];
 
@@ -57,6 +63,11 @@ export default function InventoryPage() {
   const stocks = rawData?.stocks || [];
   const summary = rawData?.summary || [];
 
+  const consumeMaterialSummary = summary.find((s: any) => s.material_type === form.material_type);
+  const consumeAvailable = consumeMaterialSummary?.current_stock ?? 0;
+  const consumeUnit = consumeMaterialSummary?.unit || '';
+  const consumeRemaining = consumeAvailable - (form.quantity_used || 0);
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -67,7 +78,7 @@ export default function InventoryPage() {
               <button className="btn-outline text-sm flex items-center gap-1.5" onClick={() => { setForm({ material_type: 'CLAY', threshold: 0, unit: 'kg' }); setModal('threshold'); }}>
                 <SlidersHorizontal size={14} /> Set Threshold
               </button>
-              <button className="btn-outline text-sm" onClick={() => { setForm({ material_type: 'CLAY', quantity: 0, unit: 'kg', unit_cost: 0, total_cost: 0, date: new Date().toISOString().slice(0,10) }); setModal('add-raw'); }}>+ Add Stock</button>
+              <button className="btn-outline text-sm" onClick={() => { setForm({ material_type: 'CLAY', quantity: 0, unit: 'kg', unit_cost: 0, total_cost: 0, supplier: '', date: new Date().toISOString().slice(0,10) }); setSupplierOther(false); setModal('add-raw'); }}>+ Add Stock</button>
               <button className="btn-secondary text-sm" onClick={() => { setForm({ material_type: 'CLAY', quantity_used: 0, date: new Date().toISOString().slice(0,10) }); setModal('consume'); }}>Record Consumption</button>
             </>
           )}
@@ -184,7 +195,29 @@ export default function InventoryPage() {
             <div><label className="label">Unit Cost (RWF)</label><input type="number" className="input" value={form.unit_cost || 0} onChange={e => setForm({ ...form, unit_cost: Number(e.target.value), total_cost: Number(e.target.value) * (form.quantity || 0) })} /></div>
             <div><label className="label">Total Cost (RWF)</label><input type="number" className="input" value={form.total_cost || 0} onChange={e => setForm({ ...form, total_cost: Number(e.target.value) })} /></div>
           </div>
-          <div><label className="label">Supplier</label><input className="input" value={form.supplier || ''} onChange={e => setForm({ ...form, supplier: e.target.value })} /></div>
+          <div>
+            <label className="label">Supplier</label>
+            <select
+              className="input"
+              value={supplierOther ? SUPPLIER_OTHER : (form.supplier || '')}
+              onChange={e => {
+                if (e.target.value === SUPPLIER_OTHER) { setSupplierOther(true); setForm({ ...form, supplier: '' }); }
+                else { setSupplierOther(false); setForm({ ...form, supplier: e.target.value }); }
+              }}
+            >
+              <option value="">-- Select Supplier --</option>
+              {(suppliers as any[]).map((s: any) => <option key={s.id} value={s.name}>{s.name}</option>)}
+              <option value={SUPPLIER_OTHER}>Not listed...</option>
+            </select>
+            {supplierOther && (
+              <input
+                className="input mt-2"
+                placeholder="Enter supplier name"
+                value={form.supplier || ''}
+                onChange={e => setForm({ ...form, supplier: e.target.value })}
+              />
+            )}
+          </div>
           <div><label className="label">Date</label><input type="date" className="input" value={form.date || ''} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
           <div className="flex gap-3 justify-end pt-2 border-t border-border">
             <button type="button" className="btn-outline" onClick={() => setModal(null)}>Cancel</button>
@@ -196,12 +229,25 @@ export default function InventoryPage() {
       {/* Consume Modal */}
       <Modal open={modal === 'consume'} onClose={() => setModal(null)} title="Record Consumption">
         <form onSubmit={e => { e.preventDefault(); consume.mutate(form); }} className="space-y-4">
-          <div><label className="label">Material Type</label>
+          <div>
+            <label className="label">
+              Material Type
+              <span className="ml-1 text-xs text-muted-foreground">
+                (available: {consumeAvailable.toLocaleString()} {consumeUnit})
+              </span>
+            </label>
             <select className="input" value={form.material_type || ''} onChange={e => setForm({ ...form, material_type: e.target.value })}>
               {MATERIALS.map(m => <option key={m}>{m}</option>)}
             </select>
           </div>
-          <div><label className="label">Quantity Used</label><input type="number" className="input" value={form.quantity_used || 0} onChange={e => setForm({ ...form, quantity_used: Number(e.target.value) })} /></div>
+          <div>
+            <label className="label">Quantity Used</label>
+            <input type="number" className="input" value={form.quantity_used || 0} onChange={e => setForm({ ...form, quantity_used: Number(e.target.value) })} />
+            <p className={`text-xs mt-1 ${consumeRemaining < 0 ? 'text-danger font-semibold' : 'text-muted-foreground'}`}>
+              Remaining after this: {consumeRemaining.toLocaleString()} {consumeUnit}
+              {consumeRemaining < 0 ? ' (exceeds available stock)' : ''}
+            </p>
+          </div>
           <div><label className="label">Date</label><input type="date" className="input" value={form.date || ''} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
           <div><label className="label">Notes</label><input className="input" value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
           <div className="flex gap-3 justify-end pt-2 border-t border-border">
