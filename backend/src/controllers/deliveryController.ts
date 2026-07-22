@@ -26,6 +26,7 @@ export async function createDelivery(req: Request, res: Response) {
 
   const order = await prisma.order.findFirst({ where: { id: orderId, deletedAt: null } });
   if (!order) return notFound(res, 'Order not found');
+  if (order.status !== 'READY') return badRequest(res, 'Only orders marked Ready can be scheduled for delivery');
 
   const delivery = await prisma.delivery.create({
     data: {
