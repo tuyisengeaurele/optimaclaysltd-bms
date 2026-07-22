@@ -131,7 +131,7 @@ export default function InvoicesPage() {
             <label className="label">Order <span className="text-primary">*</span></label>
             <select className="input" value={form.orderId} onChange={e => setForm({ ...form, orderId: e.target.value })} required>
               <option value="">-- Select Order --</option>
-              {orders.filter((o: any) => o.status !== 'CANCELLED').map((o: any) => (
+              {orders.filter((o: any) => o.status !== 'CANCELLED' && !o.invoices?.length).map((o: any) => (
                 <option key={o.id} value={o.id}>{o.customer?.company_name || o.customer?.full_name} ({fmtRWF(o.total_amount)})</option>
               ))}
             </select>

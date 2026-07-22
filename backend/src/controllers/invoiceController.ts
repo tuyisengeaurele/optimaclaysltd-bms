@@ -32,6 +32,9 @@ export async function createInvoice(req: Request, res: Response) {
   });
   if (!order) return notFound(res, 'Order not found');
 
+  const existingInvoice = await prisma.invoice.findFirst({ where: { orderId } });
+  if (existingInvoice) return badRequest(res, `This order was already invoiced as ${existingInvoice.number}`);
+
   const year = new Date().getFullYear();
   // Use a transaction so count + create are atomic — prevents duplicate numbers under concurrent requests
   const invoice = await prisma.$transaction(async (tx) => {
