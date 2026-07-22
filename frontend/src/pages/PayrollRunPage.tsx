@@ -7,7 +7,7 @@ import Modal from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { TableSkeleton } from '../components/ui/Skeleton';
 import Badge, { statusBadge } from '../components/ui/Badge';
-import { getErrorMessage, MONTHS, fmtRWF } from '../hooks/useToastHelper';
+import { getErrorMessage, MONTHS, fmtRWF, downloadPdf } from '../hooks/useToastHelper';
 
 export default function PayrollRunPage() {
   const { runId } = useParams<{ runId: string }>();
@@ -70,8 +70,11 @@ export default function PayrollRunPage() {
     window.open(payrollApi.exportUrl(runId!), '_blank');
   }
 
-  function handlePayslip(employeeId: string) {
-    window.open(payrollApi.payslipUrl(runId!, employeeId), '_blank');
+  function handlePayslip(employeeId: string, employeeName: string) {
+    downloadPdf(
+      () => payrollApi.downloadPayslip(runId!, employeeId).then(r => r.data),
+      `Payslip-${employeeName.replace(/\s+/g, '-')}.pdf`
+    );
   }
 
   if (isLoading) return <div className="p-6"><TableSkeleton /></div>;
@@ -165,11 +168,11 @@ export default function PayrollRunPage() {
                         </button>
                       )}
                       <button
-                        onClick={() => handlePayslip(entry.employeeId)}
+                        onClick={() => handlePayslip(entry.employeeId, entry.employee?.full_name || 'Employee')}
                         className="flex items-center gap-1 text-xs text-primary hover:underline"
-                        title="Open payslip"
+                        title="Download payslip"
                       >
-                        <FileText size={12} /> Payslip
+                        <FileText size={12} /> Download Payslip
                       </button>
                     </div>
                   </td>

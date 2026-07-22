@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import ExcelJS from 'exceljs';
 import { ok, created, notFound, badRequest } from '../utils/response';
+import { renderPdf } from '../lib/pdf';
 import fs from 'fs';
 import path from 'path';
 
@@ -143,16 +144,15 @@ export async function exportPayroll(req: Request, res: Response) {
   res.end();
 }
 
-export async function getPayslip(req: Request, res: Response) {
-  const { runId, employeeId } = req.params;
+async function buildPayslipHtml(runId: string, employeeId: string): Promise<{ html: string; employeeName: string } | null> {
   const run = await prisma.payrollRun.findUnique({ where: { id: runId } });
-  if (!run) return notFound(res, 'Payroll run not found');
+  if (!run) return null;
 
   const entry = await prisma.payrollEntry.findFirst({
     where: { payrollRunId: runId, employeeId },
     include: { employee: true },
   });
-  if (!entry) return notFound(res, 'Payslip not found');
+  if (!entry) return null;
 
   const monStr = MONTHS[run.month - 1];
   const fmt = (n: number) => n.toLocaleString('en-RW');
@@ -181,7 +181,6 @@ export async function getPayslip(req: Request, res: Response) {
   td, th { border: 1px solid #ddd; padding: 10px; }
   th { background: #F5F0EB; font-weight: bold; }
   .total-row td { font-weight: bold; background: #F5F0EB; }
-  @media print { .no-print { display: none; } }
 </style>
 </head>
 <body>
@@ -204,12 +203,19 @@ export async function getPayslip(req: Request, res: Response) {
   <tr><td>Gross Salary</td><td style="text-align:right;">${fmt(entry.gross_salary)}</td></tr>
   <tr class="total-row"><td>NET SALARY</td><td style="text-align:right;">${fmt(entry.net_salary)}</td></tr>
 </table>
-<div class="no-print" style="margin-top:20px;">
-  <button onclick="window.print()">Print / Save as PDF</button>
-</div>
 </body>
 </html>`;
 
-  res.setHeader('Content-Type', 'text/html');
-  res.send(html);
+  return { html, employeeName: entry.employee.full_name };
+}
+
+export async function downloadPayslipPdf(req: Request, res: Response) {
+  const { runId, employeeId } = req.params;
+  const doc = await buildPayslipHtml(runId, employeeId);
+  if (!doc) return notFound(res, 'Payslip not found');
+
+  const pdf = await renderPdf(doc.html);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="Payslip-${doc.employeeName.replace(/\s+/g, '-')}.pdf"`);
+  res.send(pdf);
 }
