@@ -6,9 +6,23 @@ import { useToast } from '../components/ui/Toast';
 import Modal from '../components/ui/Modal';
 import Badge, { statusBadge } from '../components/ui/Badge';
 import { TableSkeleton } from '../components/ui/Skeleton';
-import { getErrorMessage, MONTHS, fmtDate } from '../hooks/useToastHelper';
+import { getErrorMessage, MONTHS, fmtDate, fmtRWF } from '../hooks/useToastHelper';
 
 const STATUSES = ['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'];
+
+// Mirrors the backend default so the field shows a sensible value immediately,
+// before the user has a chance to override it.
+function defaultWage(employee: any, status: string): number {
+  if (!employee || employee.wage_type !== 'DAILY') return 0;
+  if (status === 'PRESENT') return employee.base_salary || 0;
+  if (status === 'HALF_DAY') return (employee.base_salary || 0) / 2;
+  return 0;
+}
+
+interface BulkRow {
+  status: string;
+  wage_earned: number;
+}
 
 export default function AttendancePage() {
   const qc = useQueryClient();
@@ -17,11 +31,11 @@ export default function AttendancePage() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [modal, setModal] = useState<'single' | 'bulk' | null>(null);
-  const [form, setForm] = useState({ employeeId: '', date: new Date().toISOString().slice(0, 10), status: 'PRESENT', notes: '' });
+  const [form, setForm] = useState({ employeeId: '', date: new Date().toISOString().slice(0, 10), status: 'PRESENT', notes: '', wage_earned: 0 });
 
-  // Bulk attendance state: { employeeId -> status }
+  // Bulk attendance state: { employeeId -> { status, wage_earned } }
   const [bulkDate, setBulkDate] = useState(new Date().toISOString().slice(0, 10));
-  const [bulkRows, setBulkRows] = useState<Record<string, string>>({});
+  const [bulkRows, setBulkRows] = useState<Record<string, BulkRow>>({});
 
   const { data: logs = [], isLoading } = useQuery({
     queryKey: ['attendance', month, year],
@@ -44,20 +58,44 @@ export default function AttendancePage() {
     onError: err => toast(getErrorMessage(err), 'error'),
   });
 
+  const selectedEmployee = (employees as any[]).find((e: any) => e.id === form.employeeId);
+  const showWageField = selectedEmployee && selectedEmployee.wage_type !== 'MONTHLY';
+
+  function handleEmployeeChange(employeeId: string) {
+    const employee = (employees as any[]).find((e: any) => e.id === employeeId);
+    setForm({ ...form, employeeId, wage_earned: defaultWage(employee, form.status) });
+  }
+
+  function handleStatusChange(status: string) {
+    setForm({ ...form, status, wage_earned: defaultWage(selectedEmployee, status) });
+  }
+
   function openBulk() {
-    // Pre-fill all active employees as PRESENT
-    const rows: Record<string, string> = {};
-    (employees as any[]).filter((e: any) => e.is_active).forEach((e: any) => { rows[e.id] = 'PRESENT'; });
+    // Pre-fill all active employees as PRESENT, with a wage default where relevant
+    const rows: Record<string, BulkRow> = {};
+    (employees as any[]).filter((e: any) => e.is_active).forEach((e: any) => {
+      rows[e.id] = { status: 'PRESENT', wage_earned: defaultWage(e, 'PRESENT') };
+    });
     setBulkRows(rows);
     setModal('bulk');
   }
 
+  function updateBulkStatus(employeeId: string, status: string) {
+    const employee = (employees as any[]).find((e: any) => e.id === employeeId);
+    setBulkRows(r => ({ ...r, [employeeId]: { status, wage_earned: defaultWage(employee, status) } }));
+  }
+
+  function updateBulkWage(employeeId: string, wage_earned: number) {
+    setBulkRows(r => ({ ...r, [employeeId]: { ...r[employeeId], wage_earned } }));
+  }
+
   function submitBulk(e: React.FormEvent) {
     e.preventDefault();
-    const entries = Object.entries(bulkRows).map(([employeeId, status]) => ({
+    const entries = Object.entries(bulkRows).map(([employeeId, row]) => ({
       employeeId,
       date: bulkDate,
-      status,
+      status: row.status,
+      wage_earned: row.wage_earned,
     }));
     save.mutate({ entries });
   }
@@ -96,7 +134,7 @@ export default function AttendancePage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="table-header">
-                {['Employee', 'Date', 'Status', 'Notes'].map(h => (
+                {['Employee', 'Date', 'Status', 'Wage Earned', 'Notes'].map(h => (
                   <th key={h} className="px-3 py-3 text-left first:rounded-l last:rounded-r">{h}</th>
                 ))}
               </tr>
@@ -107,11 +145,12 @@ export default function AttendancePage() {
                   <td className="px-3 py-3 font-medium">{log.employee?.full_name}</td>
                   <td className="px-3 py-3">{fmtDate(log.date)}</td>
                   <td className="px-3 py-3"><Badge variant={statusBadge(log.status)}>{log.status}</Badge></td>
+                  <td className="px-3 py-3">{log.employee?.wage_type !== 'MONTHLY' ? fmtRWF(log.wage_earned || 0) : <span className="text-muted-foreground">-</span>}</td>
                   <td className="px-3 py-3 text-muted-foreground">{log.notes || '-'}</td>
                 </tr>
               ))}
               {logs.length === 0 && (
-                <tr><td colSpan={4} className="px-3 py-6 text-center text-muted-foreground">No attendance records for this period</td></tr>
+                <tr><td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">No attendance records for this period</td></tr>
               )}
             </tbody>
           </table>
@@ -123,7 +162,7 @@ export default function AttendancePage() {
         <form onSubmit={e => { e.preventDefault(); save.mutate(form); }} className="space-y-4">
           <div>
             <label className="label">Employee <span className="text-primary">*</span></label>
-            <select className="input" value={form.employeeId} onChange={e => setForm({ ...form, employeeId: e.target.value })} required>
+            <select className="input" value={form.employeeId} onChange={e => handleEmployeeChange(e.target.value)} required>
               <option value="">-- Select Employee --</option>
               {(employees as any[]).map((e: any) => <option key={e.id} value={e.id}>{e.full_name}</option>)}
             </select>
@@ -134,10 +173,19 @@ export default function AttendancePage() {
           </div>
           <div>
             <label className="label">Status</label>
-            <select className="input" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
+            <select className="input" value={form.status} onChange={e => handleStatusChange(e.target.value)}>
               {STATUSES.map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
+          {showWageField && (
+            <div>
+              <label className="label">
+                Wage Earned (RWF)
+                <span className="text-xs text-muted-foreground"> ({selectedEmployee.wage_type === 'DAILY' ? 'defaults to day rate, editable' : 'enter based on output'})</span>
+              </label>
+              <input type="number" min={0} className="input" value={form.wage_earned} onChange={e => setForm({ ...form, wage_earned: Number(e.target.value) })} />
+            </div>
+          )}
           <div>
             <label className="label">Notes</label>
             <input className="input" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
@@ -162,23 +210,40 @@ export default function AttendancePage() {
                 <tr>
                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Employee</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Status</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Wage (RWF)</th>
                 </tr>
               </thead>
               <tbody>
-                {(employees as any[]).filter((e: any) => e.is_active).map((emp: any) => (
-                  <tr key={emp.id} className="border-t border-border">
-                    <td className="px-3 py-2 font-medium">{emp.full_name}</td>
-                    <td className="px-3 py-2">
-                      <select
-                        className="input py-1 text-sm"
-                        value={bulkRows[emp.id] ?? 'PRESENT'}
-                        onChange={e => setBulkRows(r => ({ ...r, [emp.id]: e.target.value }))}
-                      >
-                        {STATUSES.map(s => <option key={s}>{s}</option>)}
-                      </select>
-                    </td>
-                  </tr>
-                ))}
+                {(employees as any[]).filter((e: any) => e.is_active).map((emp: any) => {
+                  const row = bulkRows[emp.id] ?? { status: 'PRESENT', wage_earned: 0 };
+                  return (
+                    <tr key={emp.id} className="border-t border-border">
+                      <td className="px-3 py-2 font-medium">{emp.full_name}</td>
+                      <td className="px-3 py-2">
+                        <select
+                          className="input py-1 text-sm"
+                          value={row.status}
+                          onChange={e => updateBulkStatus(emp.id, e.target.value)}
+                        >
+                          {STATUSES.map(s => <option key={s}>{s}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-3 py-2">
+                        {emp.wage_type !== 'MONTHLY' ? (
+                          <input
+                            type="number"
+                            min={0}
+                            className="input py-1 text-sm"
+                            value={row.wage_earned}
+                            onChange={e => updateBulkWage(emp.id, Number(e.target.value))}
+                          />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
