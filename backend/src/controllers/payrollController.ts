@@ -35,16 +35,32 @@ export async function createPayrollRun(req: Request, res: Response) {
 
   const employees = await prisma.employee.findMany({ where: { deletedAt: null, is_active: true } });
   const monStr = MONTHS[month - 1];
+
+  // DAILY/PIECE_RATE staff are paid whatever they actually earned that month, tallied
+  // from their attendance records, rather than a flat monthly figure.
+  const start = new Date(year, month - 1, 1);
+  const end = new Date(year, month, 1);
+  const dailyWages = await prisma.attendanceLog.groupBy({
+    by: ['employeeId'],
+    where: { employeeId: { in: employees.filter(e => e.wage_type !== 'MONTHLY').map(e => e.id) }, date: { gte: start, lt: end } },
+    _sum: { wage_earned: true },
+  });
+  const wagesByEmployee = new Map(dailyWages.map(w => [w.employeeId, w._sum.wage_earned || 0]));
+
   const run = await prisma.payrollRun.create({
     data: {
       month, year,
       entries: {
-        create: employees.map(e => ({
-          employeeId: e.id,
-          gross_salary: e.base_salary || 0,
-          net_salary: e.base_salary || 0,
-          narration: `Monthly-salary-${monStr}-${year}`,
-        })),
+        create: employees.map(e => {
+          const gross = e.wage_type === 'MONTHLY' ? (e.base_salary || 0) : (wagesByEmployee.get(e.id) || 0);
+          const narration = e.wage_type === 'MONTHLY' ? `Monthly-salary-${monStr}-${year}` : `Daily-wages-${monStr}-${year}`;
+          return {
+            employeeId: e.id,
+            gross_salary: gross,
+            net_salary: gross,
+            narration,
+          };
+        }),
       },
     },
     include: { entries: { include: { employee: true } } },
@@ -63,16 +79,22 @@ export async function getPayrollRun(req: Request, res: Response) {
 
 export async function updateEntry(req: Request, res: Response) {
   const { runId, entryId } = req.params;
-  const { gross_salary, payment_status, payment_date } = req.body;
+  const { gross_salary, bonus, deduction, payment_status, payment_date } = req.body;
 
   const entry = await prisma.payrollEntry.findFirst({ where: { id: entryId, payrollRunId: runId } });
   if (!entry) return notFound(res, 'Entry not found');
 
+  const resolvedGross = gross_salary ?? entry.gross_salary;
+  const resolvedBonus = bonus ?? entry.bonus;
+  const resolvedDeduction = deduction ?? entry.deduction;
+
   const updated = await prisma.payrollEntry.update({
     where: { id: entryId },
     data: {
-      gross_salary: gross_salary ?? entry.gross_salary,
-      net_salary: gross_salary ?? entry.net_salary,
+      gross_salary: resolvedGross,
+      bonus: resolvedBonus,
+      deduction: resolvedDeduction,
+      net_salary: resolvedGross + resolvedBonus - resolvedDeduction,
       payment_status: payment_status ?? entry.payment_status,
       payment_date: payment_date ? new Date(payment_date) : entry.payment_date,
     },
@@ -201,6 +223,8 @@ async function buildPayslipHtml(runId: string, employeeId: string): Promise<{ ht
 <table style="margin-top:20px;">
   <tr><th>Description</th><th>Amount (RWF)</th></tr>
   <tr><td>Gross Salary</td><td style="text-align:right;">${fmt(entry.gross_salary)}</td></tr>
+  ${entry.bonus ? `<tr><td>Bonus</td><td style="text-align:right;">${fmt(entry.bonus)}</td></tr>` : ''}
+  ${entry.deduction ? `<tr><td>Deduction</td><td style="text-align:right;">-${fmt(entry.deduction)}</td></tr>` : ''}
   <tr class="total-row"><td>NET SALARY</td><td style="text-align:right;">${fmt(entry.net_salary)}</td></tr>
 </table>
 </body>

@@ -172,6 +172,8 @@ model PayrollEntry {
   employee       Employee      @relation(fields: [employeeId], references: [id])
   employeeId     String
   gross_salary   Float
+  bonus          Float         @default(0)
+  deduction      Float         @default(0)
   net_salary     Float
   narration      String
   payment_status PaymentStatus @default(PENDING)
@@ -181,14 +183,15 @@ model PayrollEntry {
 }
 
 model AttendanceLog {
-  id         String           @id @default(uuid())
-  employee   Employee         @relation(fields: [employeeId], references: [id])
-  employeeId String
-  date       DateTime
-  status     AttendanceStatus
-  notes      String?
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
+  id          String           @id @default(uuid())
+  employee    Employee         @relation(fields: [employeeId], references: [id])
+  employeeId  String
+  date        DateTime
+  status      AttendanceStatus
+  wage_earned Float?
+  notes       String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
   @@unique([employeeId, date])
 }

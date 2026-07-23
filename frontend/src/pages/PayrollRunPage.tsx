@@ -18,6 +18,8 @@ export default function PayrollRunPage() {
   // Modal state for editing an entry
   const [editEntry, setEditEntry] = useState<any>(null);
   const [editGross, setEditGross] = useState('');
+  const [editBonus, setEditBonus] = useState('');
+  const [editDeduction, setEditDeduction] = useState('');
   const [editStatus, setEditStatus] = useState('');
   const [confirmFinalize, setConfirmFinalize] = useState(false);
 
@@ -51,6 +53,8 @@ export default function PayrollRunPage() {
   function openEdit(entry: any) {
     setEditEntry(entry);
     setEditGross(String(entry.gross_salary));
+    setEditBonus(String(entry.bonus || 0));
+    setEditDeduction(String(entry.deduction || 0));
     setEditStatus(entry.payment_status);
   }
 
@@ -60,11 +64,15 @@ export default function PayrollRunPage() {
       entryId: editEntry.id,
       data: {
         gross_salary: Number(editGross),
+        bonus: Number(editBonus),
+        deduction: Number(editDeduction),
         payment_status: editStatus,
         payment_date: editStatus === 'PAID' ? new Date().toISOString() : null,
       },
     });
   }
+
+  const editNetPreview = Number(editGross || 0) + Number(editBonus || 0) - Number(editDeduction || 0);
 
   function handleExport() {
     window.open(payrollApi.exportUrl(runId!), '_blank');
@@ -141,7 +149,7 @@ export default function PayrollRunPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="table-header">
-                {['Employee', 'Bank', 'Account No.', 'Net Salary (RWF)', 'Status', 'Actions'].map(h => (
+                {['Employee', 'Bank', 'Account No.', 'Gross (RWF)', 'Bonus', 'Deduction', 'Net Salary (RWF)', 'Status', 'Actions'].map(h => (
                   <th key={h} className="px-3 py-3 text-left first:rounded-l last:rounded-r">{h}</th>
                 ))}
               </tr>
@@ -152,6 +160,9 @@ export default function PayrollRunPage() {
                   <td className="px-3 py-3 font-medium">{entry.employee?.full_name}</td>
                   <td className="px-3 py-3 text-xs text-muted-foreground">{entry.employee?.bank_name || 'Not set'}</td>
                   <td className="px-3 py-3 font-mono text-xs">{entry.employee?.bank_account_number || 'Not set'}</td>
+                  <td className="px-3 py-3">{fmtRWF(entry.gross_salary)}</td>
+                  <td className="px-3 py-3 text-success">{entry.bonus ? `+${fmtRWF(entry.bonus)}` : '-'}</td>
+                  <td className="px-3 py-3 text-danger">{entry.deduction ? `-${fmtRWF(entry.deduction)}` : '-'}</td>
                   <td className="px-3 py-3 font-semibold">{fmtRWF(entry.net_salary)}</td>
                   <td className="px-3 py-3">
                     <Badge variant={statusBadge(entry.payment_status)}>{entry.payment_status}</Badge>
@@ -193,17 +204,30 @@ export default function PayrollRunPage() {
               <div><span className="text-gray-500">Narration:</span> <span>{editEntry.narration}</span></div>
             </div>
             <div>
-              <label className="label">Amount to Pay (RWF) <span className="text-primary">*</span></label>
+              <label className="label">Gross Salary (RWF) <span className="text-primary">*</span></label>
               <input
                 type="number"
-                className="input text-lg font-semibold"
+                className="input"
                 value={editGross}
                 onChange={e => setEditGross(e.target.value)}
                 min={0}
                 required
                 autoFocus
               />
-              <p className="text-xs text-gray-400 mt-1">This is both the gross and net salary (no deductions by policy)</p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="label">Bonus (RWF)</label>
+                <input type="number" className="input" value={editBonus} onChange={e => setEditBonus(e.target.value)} min={0} />
+              </div>
+              <div>
+                <label className="label">Deduction (RWF)</label>
+                <input type="number" className="input" value={editDeduction} onChange={e => setEditDeduction(e.target.value)} min={0} />
+              </div>
+            </div>
+            <div className="bg-background rounded-lg p-3 text-sm flex justify-between items-center">
+              <span className="text-gray-500">Net Salary</span>
+              <span className="text-lg font-semibold text-accent">{fmtRWF(editNetPreview)}</span>
             </div>
             <div>
               <label className="label">Payment Status</label>
