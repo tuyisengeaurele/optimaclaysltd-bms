@@ -40,6 +40,7 @@ function numberToWords(n: number): string {
 // ── LIST ────────────────────────────────────────────────────────────────────
 export async function listProformas(req: Request, res: Response) {
   const proformas = await prisma.proformaInvoice.findMany({
+    where: { deletedAt: null },
     include: { customer: true, order: true },
     orderBy: { date_issued: 'desc' },
   });
@@ -117,16 +118,16 @@ export async function createProforma(req: Request, res: Response) {
 
 // ── DELETE ───────────────────────────────────────────────────────────────────
 export async function deleteProforma(req: Request, res: Response) {
-  const proforma = await prisma.proformaInvoice.findUnique({ where: { id: req.params.id } });
+  const proforma = await prisma.proformaInvoice.findFirst({ where: { id: req.params.id, deletedAt: null } });
   if (!proforma) return notFound(res, 'Proforma invoice not found');
-  await prisma.proformaInvoice.delete({ where: { id: req.params.id } });
+  await prisma.proformaInvoice.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });
   return ok(res, { message: 'Proforma invoice deleted' });
 }
 
 // ── GET ──────────────────────────────────────────────────────────────────────
 export async function getProforma(req: Request, res: Response) {
-  const proforma = await prisma.proformaInvoice.findUnique({
-    where: { id: req.params.id },
+  const proforma = await prisma.proformaInvoice.findFirst({
+    where: { id: req.params.id, deletedAt: null },
     include: { customer: true, order: true },
   });
   if (!proforma) return notFound(res, 'Proforma invoice not found');
@@ -135,8 +136,8 @@ export async function getProforma(req: Request, res: Response) {
 
 // ── PDF DOCUMENT ─────────────────────────────────────────────────────────────
 async function buildProformaHtml(id: string): Promise<{ html: string; number: string } | null> {
-  const proforma = await prisma.proformaInvoice.findUnique({
-    where: { id },
+  const proforma = await prisma.proformaInvoice.findFirst({
+    where: { id, deletedAt: null },
     include: { customer: true, order: true },
   });
   if (!proforma) return null;

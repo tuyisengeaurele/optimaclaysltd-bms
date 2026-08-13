@@ -75,9 +75,15 @@ export async function listFinishedGoods(req: Request, res: Response) {
   return ok(res, { stocks, summary: Array.from(summary.values()) });
 }
 
-// Total units currently on hand for a brick type and grade, summed across every stock entry
-export async function getAvailableStock(brick_type: BrickType, quality_grade: QualityGrade): Promise<number> {
-  const result = await prisma.finishedGoodsStock.aggregate({
+// Total units currently on hand for a brick type and grade, summed across every stock entry.
+// Accepts an optional transaction client so callers can run this check as part of
+// a larger atomic operation (e.g. order creation) instead of a standalone read.
+export async function getAvailableStock(
+  brick_type: BrickType,
+  quality_grade: QualityGrade,
+  client: Pick<typeof prisma, 'finishedGoodsStock'> = prisma
+): Promise<number> {
+  const result = await client.finishedGoodsStock.aggregate({
     where: { brick_type, quality_grade },
     _sum: { quantity: true },
   });
