@@ -12,6 +12,7 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 
 export async function listPayrollRuns(req: Request, res: Response) {
   const runs = await prisma.payrollRun.findMany({
+    where: { deletedAt: null },
     orderBy: [{ year: 'desc' }, { month: 'desc' }],
     include: { _count: { select: { entries: true } } },
   });
@@ -19,20 +20,15 @@ export async function listPayrollRuns(req: Request, res: Response) {
 }
 
 export async function deletePayrollRun(req: Request, res: Response) {
-  const run = await prisma.payrollRun.findUnique({ where: { id: req.params.runId } });
+  const run = await prisma.payrollRun.findFirst({ where: { id: req.params.runId, deletedAt: null } });
   if (!run) return notFound(res, 'Payroll run not found');
   if (run.finalized) return badRequest(res, 'Cannot delete a finalized payroll run');
-  // Cascade delete entries first
-  await prisma.payrollEntry.deleteMany({ where: { payrollRunId: run.id } });
-  await prisma.payrollRun.delete({ where: { id: run.id } });
+  await prisma.payrollRun.update({ where: { id: run.id }, data: { deletedAt: new Date() } });
   return ok(res, { deleted: true });
 }
 
 export async function createPayrollRun(req: Request, res: Response) {
   const { month, year } = req.body;
-  const existing = await prisma.payrollRun.findFirst({ where: { month, year } });
-  if (existing) return badRequest(res, 'Payroll run for this month/year already exists');
-
   const employees = await prisma.employee.findMany({ where: { deletedAt: null, is_active: true } });
   const monStr = MONTHS[month - 1];
 
@@ -47,30 +43,44 @@ export async function createPayrollRun(req: Request, res: Response) {
   });
   const wagesByEmployee = new Map(dailyWages.map(w => [w.employeeId, w._sum.wage_earned || 0]));
 
-  const run = await prisma.payrollRun.create({
-    data: {
-      month, year,
-      entries: {
-        create: employees.map(e => {
-          const gross = e.wage_type === 'MONTHLY' ? (e.base_salary || 0) : (wagesByEmployee.get(e.id) || 0);
-          const narration = e.wage_type === 'MONTHLY' ? `Monthly-salary-${monStr}-${year}` : `Daily-wages-${monStr}-${year}`;
-          return {
-            employeeId: e.id,
-            gross_salary: gross,
-            net_salary: gross,
-            narration,
-          };
-        }),
-      },
-    },
-    include: { entries: { include: { employee: true } } },
-  });
-  return created(res, run);
+  // Serializable so two requests racing to create the same month/year run can't
+  // both pass the "does one already exist" check and both succeed.
+  try {
+    const run = await prisma.$transaction(async (tx) => {
+      const existing = await tx.payrollRun.findFirst({ where: { month, year, deletedAt: null } });
+      if (existing) throw new Error('DUPLICATE_RUN');
+
+      return tx.payrollRun.create({
+        data: {
+          month, year,
+          entries: {
+            create: employees.map(e => {
+              const gross = e.wage_type === 'MONTHLY' ? (e.base_salary || 0) : (wagesByEmployee.get(e.id) || 0);
+              const narration = e.wage_type === 'MONTHLY' ? `Monthly-salary-${monStr}-${year}` : `Daily-wages-${monStr}-${year}`;
+              return {
+                employeeId: e.id,
+                gross_salary: gross,
+                net_salary: gross,
+                narration,
+              };
+            }),
+          },
+        },
+        include: { entries: { include: { employee: true } } },
+      });
+    }, { isolationLevel: 'Serializable' });
+    return created(res, run);
+  } catch (err: any) {
+    if (err.message === 'DUPLICATE_RUN' || err.code === 'P2034') {
+      return badRequest(res, 'Payroll run for this month/year already exists');
+    }
+    throw err;
+  }
 }
 
 export async function getPayrollRun(req: Request, res: Response) {
-  const run = await prisma.payrollRun.findUnique({
-    where: { id: req.params.runId },
+  const run = await prisma.payrollRun.findFirst({
+    where: { id: req.params.runId, deletedAt: null },
     include: { entries: { include: { employee: true } } },
   });
   if (!run) return notFound(res, 'Payroll run not found');
@@ -104,7 +114,7 @@ export async function updateEntry(req: Request, res: Response) {
 }
 
 export async function finalizeRun(req: Request, res: Response) {
-  const run = await prisma.payrollRun.findUnique({ where: { id: req.params.runId } });
+  const run = await prisma.payrollRun.findFirst({ where: { id: req.params.runId, deletedAt: null } });
   if (!run) return notFound(res, 'Payroll run not found');
   if (run.finalized) return badRequest(res, 'Payroll run is already finalized');
   const updated = await prisma.payrollRun.update({
@@ -115,8 +125,8 @@ export async function finalizeRun(req: Request, res: Response) {
 }
 
 export async function exportPayroll(req: Request, res: Response) {
-  const run = await prisma.payrollRun.findUnique({
-    where: { id: req.params.runId },
+  const run = await prisma.payrollRun.findFirst({
+    where: { id: req.params.runId, deletedAt: null },
     include: { entries: { include: { employee: true } } },
   });
   if (!run) return notFound(res, 'Payroll run not found');

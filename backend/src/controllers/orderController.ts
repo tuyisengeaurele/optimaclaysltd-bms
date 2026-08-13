@@ -28,35 +28,56 @@ export async function createOrder(req: Request, res: Response) {
   const total = qty * price;
   const grade = quality_grade || 'GRADE_A';
 
-  if (brick_type !== 'CUSTOM') {
-    const available = await getAvailableStock(brick_type, grade);
-    if (available < qty) {
-      return badRequest(res, `Not enough stock. Available: ${available.toLocaleString()}, requested: ${qty.toLocaleString()}`);
-    }
-  }
+  // Serializable so the stock/credit checks and the order create happen as one
+  // atomic step — two concurrent orders for the same brick type can no longer
+  // both read "enough stock" and both succeed, overselling inventory.
+  try {
+    const order = await prisma.$transaction(async (tx) => {
+      if (brick_type !== 'CUSTOM') {
+        const available = await getAvailableStock(brick_type, grade, tx);
+        if (available < qty) {
+          throw new Error(`INSUFFICIENT_STOCK:${available}:${qty}`);
+        }
+      }
 
-  if (customer.credit_limit > 0) {
-    const outstanding = await getCustomerOutstanding(customerId);
-    if (outstanding + total > customer.credit_limit) {
-      return badRequest(res, `Order total exceeds customer credit limit. Outstanding: ${outstanding.toFixed(2)}, Limit: ${customer.credit_limit}`);
-    }
-  }
+      if (customer.credit_limit > 0) {
+        const outstanding = await getCustomerOutstanding(customerId, tx);
+        if (outstanding + total > customer.credit_limit) {
+          throw new Error(`CREDIT_LIMIT_EXCEEDED:${outstanding.toFixed(2)}:${customer.credit_limit}`);
+        }
+      }
 
-  const order = await prisma.order.create({
-    data: {
-      customerId,
-      brick_type,
-      custom_name: custom_name || null,
-      quantity: qty,
-      unit_price: price,
-      total_amount: total,
-      quality_grade: grade,
-      notes: notes || null,
-      order_date: order_date ? new Date(order_date) : new Date(),
-    },
-    include: { customer: true },
-  });
-  return created(res, order);
+      return tx.order.create({
+        data: {
+          customerId,
+          brick_type,
+          custom_name: custom_name || null,
+          quantity: qty,
+          unit_price: price,
+          total_amount: total,
+          quality_grade: grade,
+          notes: notes || null,
+          order_date: order_date ? new Date(order_date) : new Date(),
+        },
+        include: { customer: true },
+      });
+    }, { isolationLevel: 'Serializable' });
+
+    return created(res, order);
+  } catch (err: any) {
+    if (typeof err.message === 'string' && err.message.startsWith('INSUFFICIENT_STOCK:')) {
+      const [, available, requested] = err.message.split(':');
+      return badRequest(res, `Not enough stock. Available: ${Number(available).toLocaleString()}, requested: ${Number(requested).toLocaleString()}`);
+    }
+    if (typeof err.message === 'string' && err.message.startsWith('CREDIT_LIMIT_EXCEEDED:')) {
+      const [, outstanding, limit] = err.message.split(':');
+      return badRequest(res, `Order total exceeds customer credit limit. Outstanding: ${outstanding}, Limit: ${limit}`);
+    }
+    if (err.code === 'P2034') {
+      return badRequest(res, 'Stock changed while placing this order, please try again');
+    }
+    throw err;
+  }
 }
 
 export async function getOrder(req: Request, res: Response) {
@@ -79,25 +100,39 @@ export async function updateOrder(req: Request, res: Response) {
   if (qty <= 0) return badRequest(res, 'quantity must be positive');
   if (price <= 0) return badRequest(res, 'unit_price must be positive');
 
-  if (qty > order.quantity && order.brick_type !== 'CUSTOM') {
-    const available = await getAvailableStock(order.brick_type, order.quality_grade);
-    if (available < qty) {
-      return badRequest(res, `Not enough stock. Available: ${available.toLocaleString()}, requested: ${qty.toLocaleString()}`);
-    }
-  }
+  try {
+    const updated = await prisma.$transaction(async (tx) => {
+      if (qty > order.quantity && order.brick_type !== 'CUSTOM') {
+        const available = await getAvailableStock(order.brick_type, order.quality_grade, tx);
+        if (available < qty) {
+          throw new Error(`INSUFFICIENT_STOCK:${available}:${qty}`);
+        }
+      }
 
-  const updated = await prisma.order.update({
-    where: { id: req.params.id },
-    data: {
-      quantity: qty,
-      unit_price: price,
-      total_amount: qty * price,
-      notes: notes !== undefined ? (notes || null) : undefined,
-      required_delivery_date: required_delivery_date ? new Date(required_delivery_date) : undefined,
-    },
-    include: { customer: true },
-  });
-  return ok(res, updated);
+      return tx.order.update({
+        where: { id: req.params.id },
+        data: {
+          quantity: qty,
+          unit_price: price,
+          total_amount: qty * price,
+          notes: notes !== undefined ? (notes || null) : undefined,
+          required_delivery_date: required_delivery_date ? new Date(required_delivery_date) : undefined,
+        },
+        include: { customer: true },
+      });
+    }, { isolationLevel: 'Serializable' });
+
+    return ok(res, updated);
+  } catch (err: any) {
+    if (typeof err.message === 'string' && err.message.startsWith('INSUFFICIENT_STOCK:')) {
+      const [, available, requested] = err.message.split(':');
+      return badRequest(res, `Not enough stock. Available: ${Number(available).toLocaleString()}, requested: ${Number(requested).toLocaleString()}`);
+    }
+    if (err.code === 'P2034') {
+      return badRequest(res, 'Stock changed while amending this order, please try again');
+    }
+    throw err;
+  }
 }
 
 export async function deleteOrder(req: Request, res: Response) {
@@ -164,9 +199,9 @@ export async function getCustomerStatement(req: Request, res: Response) {
   });
 }
 
-async function getCustomerOutstanding(customerId: string): Promise<number> {
-  const invoices = await prisma.invoice.findMany({
-    where: { order: { customerId, deletedAt: null } },
+async function getCustomerOutstanding(customerId: string, client: Pick<typeof prisma, 'invoice'> = prisma): Promise<number> {
+  const invoices = await client.invoice.findMany({
+    where: { deletedAt: null, order: { customerId, deletedAt: null } },
     include: { payments: true },
   });
   let outstanding = 0;

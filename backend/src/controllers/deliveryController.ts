@@ -1,13 +1,57 @@
 import { Request, Response } from 'express';
+import { BrickType, QualityGrade } from '@prisma/client';
 import fs from 'fs';
 import path from 'path';
 import { prisma } from '../lib/prisma';
 import { ok, created, notFound, badRequest } from '../utils/response';
 import { renderPdf } from '../lib/pdf';
 
+// Decrements stock for a delivered quantity across every matching row (oldest
+// first), rather than picking one row and silently doing nothing if it alone
+// doesn't have enough. Goods that physically left the warehouse must always be
+// reflected in the total, even if that means the last row goes negative because
+// recorded stock was already short — silently skipping the decrement would leave
+// inventory permanently overstated with no trace of the discrepancy.
+async function decrementFinishedGoodsStock(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  brick_type: BrickType,
+  quality_grade: QualityGrade,
+  qty: number
+) {
+  const rows = await tx.finishedGoodsStock.findMany({
+    where: { brick_type, quality_grade },
+    orderBy: { date: 'asc' },
+  });
+
+  let remaining = qty;
+  let lastRowId: string | null = null;
+  for (const row of rows) {
+    if (remaining <= 0) break;
+    const take = Math.min(row.quantity, remaining);
+    if (take > 0) {
+      await tx.finishedGoodsStock.update({ where: { id: row.id }, data: { quantity: { decrement: take } } });
+      remaining -= take;
+    }
+    lastRowId = row.id;
+  }
+
+  if (remaining > 0) {
+    if (lastRowId) {
+      // Recorded stock ran out before the delivered quantity did — apply the
+      // shortfall anyway so the total stays accurate, and it's visible as a
+      // negative row instead of vanishing.
+      await tx.finishedGoodsStock.update({ where: { id: lastRowId }, data: { quantity: { decrement: remaining } } });
+    } else {
+      await tx.finishedGoodsStock.create({
+        data: { brick_type, quality_grade, quantity: -remaining, source: 'DELIVERY_SHORTFALL', notes: 'No stock record existed for this delivery; recorded as a shortfall' },
+      });
+    }
+  }
+}
+
 export async function listDeliveries(req: Request, res: Response) {
   const { status, from, to } = req.query;
-  const where: any = {};
+  const where: any = { deletedAt: null };
   if (status) where.status = status;
   if (from) where.scheduled_date = { ...where.scheduled_date, gte: new Date(from as string) };
   if (to) where.scheduled_date = { ...where.scheduled_date, lte: new Date(to as string) };
@@ -46,52 +90,49 @@ export async function createDelivery(req: Request, res: Response) {
 }
 
 export async function updateDeliveryStatus(req: Request, res: Response) {
-  const delivery = await prisma.delivery.findUnique({
-    where: { id: req.params.id },
+  const delivery = await prisma.delivery.findFirst({
+    where: { id: req.params.id, deletedAt: null },
     include: { order: true },
   });
   if (!delivery) return notFound(res, 'Delivery not found');
 
   const { status, actual_delivery_date, receiver_name, damage_qty, damage_notes, notes } = req.body;
-
   const wasDelivered = delivery.status !== 'DELIVERED' && status === 'DELIVERED';
 
-  const updated = await prisma.delivery.update({
-    where: { id: req.params.id },
-    data: {
-      status: status || undefined,
-      actual_delivery_date: actual_delivery_date ? new Date(actual_delivery_date) : (wasDelivered ? new Date() : undefined),
-      receiver_name: receiver_name !== undefined ? (receiver_name || null) : undefined,
-      damage_qty: damage_qty != null ? Number(damage_qty) : undefined,
-      damage_notes: damage_notes !== undefined ? (damage_notes || null) : undefined,
-      notes: notes !== undefined ? (notes || null) : undefined,
-    },
-    include: { order: { include: { customer: true } }, costs: true },
-  });
+  // Stock decrement and the order status flip both stem from the same physical
+  // event (goods left the warehouse), so a crash partway through must not be
+  // able to leave one done and the other not.
+  const updated = await prisma.$transaction(async (tx) => {
+    const result = await tx.delivery.update({
+      where: { id: req.params.id },
+      data: {
+        status: status || undefined,
+        actual_delivery_date: actual_delivery_date ? new Date(actual_delivery_date) : (wasDelivered ? new Date() : undefined),
+        receiver_name: receiver_name !== undefined ? (receiver_name || null) : undefined,
+        damage_qty: damage_qty != null ? Number(damage_qty) : undefined,
+        damage_notes: damage_notes !== undefined ? (damage_notes || null) : undefined,
+        notes: notes !== undefined ? (notes || null) : undefined,
+      },
+      include: { order: { include: { customer: true } }, costs: true },
+    });
 
-  if (wasDelivered && delivery.order) {
-    const deliveredQty = delivery.quantity_loaded - (Number(damage_qty) || 0);
-    if (deliveredQty > 0) {
-      const stock = await prisma.finishedGoodsStock.findFirst({
-        where: { brick_type: delivery.order.brick_type, quality_grade: delivery.order.quality_grade },
-        orderBy: { date: 'asc' },
-      });
-      if (stock && stock.quantity >= deliveredQty) {
-        await prisma.finishedGoodsStock.update({
-          where: { id: stock.id },
-          data: { quantity: { decrement: deliveredQty } },
-        });
+    if (wasDelivered && delivery.order) {
+      const deliveredQty = delivery.quantity_loaded - (Number(damage_qty) || 0);
+      if (deliveredQty > 0) {
+        await decrementFinishedGoodsStock(tx, delivery.order.brick_type, delivery.order.quality_grade, deliveredQty);
       }
+      await tx.order.update({ where: { id: delivery.order.id }, data: { status: 'DELIVERED' } });
     }
-    await prisma.order.update({ where: { id: delivery.order.id }, data: { status: 'DELIVERED' } });
-  }
+
+    return result;
+  });
 
   return ok(res, updated);
 }
 
 export async function recordDamage(req: Request, res: Response) {
-  const delivery = await prisma.delivery.findUnique({
-    where: { id: req.params.id },
+  const delivery = await prisma.delivery.findFirst({
+    where: { id: req.params.id, deletedAt: null },
     include: { order: { include: { invoices: true } } },
   });
   if (!delivery) return notFound(res, 'Delivery not found');
@@ -109,8 +150,8 @@ export async function recordDamage(req: Request, res: Response) {
 }
 
 async function buildWaybillHtml(id: string): Promise<{ html: string; number: string } | null> {
-  const delivery = await prisma.delivery.findUnique({
-    where: { id },
+  const delivery = await prisma.delivery.findFirst({
+    where: { id, deletedAt: null },
     include: { order: { include: { customer: true } }, costs: true },
   });
   if (!delivery) return null;
@@ -240,9 +281,8 @@ export async function downloadWaybillPdf(req: Request, res: Response) {
 }
 
 export async function deleteDelivery(req: Request, res: Response) {
-  const delivery = await prisma.delivery.findUnique({ where: { id: req.params.id } });
+  const delivery = await prisma.delivery.findFirst({ where: { id: req.params.id, deletedAt: null } });
   if (!delivery) return notFound(res, 'Delivery not found');
-  await prisma.deliveryCost.deleteMany({ where: { deliveryId: req.params.id } });
-  await prisma.delivery.delete({ where: { id: req.params.id } });
+  await prisma.delivery.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });
   return ok(res, { message: 'Delivery deleted' });
 }

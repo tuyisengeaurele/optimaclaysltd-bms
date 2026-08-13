@@ -161,6 +161,7 @@ model PayrollRun {
   finalized Boolean       @default(false)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
+  deletedAt DateTime?
 
   entries PayrollEntry[]
 }
@@ -412,6 +413,7 @@ model ProformaInvoice {
   delivery_period String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
 }
 
 model Invoice {
@@ -426,6 +428,7 @@ model Invoice {
   is_overdue Boolean   @default(false)
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
 
   items    InvoiceItem[]
   payments Payment[]
@@ -474,6 +477,7 @@ model Delivery {
   notes                String?
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
+  deletedAt            DateTime?
 
   costs DeliveryCost[]
 }
